@@ -13,6 +13,30 @@ python3 -m http.server -d aim-trainer 8080
 
 To host it on GitHub Pages, go to **Settings → Pages**, deploy from this branch, and open `/aim-trainer/`.
 
+## Weapons
+
+Ten Valorant guns, each with its fire rate, magazine, reload time, damage falloff, first-shot spread, spray error and a recoil pattern. Pick one in the Loadout panel, or switch mid-drill with `1`–`0`.
+
+| # | Gun | Type | Fire rate | Mag | Head / body / legs |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Classic | Sidearm, semi | 6.75/s | 12 | 78 / 26 / 22 |
+| 2 | Ghost | Sidearm, semi, suppressed | 6.75/s | 15 | 105 / 30 / 25 |
+| 3 | Sheriff | Sidearm, semi | 4/s | 6 | 159 / 55 / 46 |
+| 4 | Spectre | SMG, auto, suppressed | 13.33/s | 30 | 78 / 26 / 22 |
+| 5 | Bulldog | Rifle, auto | 9.15/s | 24 | 116 / 35 / 30 |
+| 6 | Phantom | Rifle, auto, suppressed | 11/s | 30 | 156 / 39 / 33 (falls off) |
+| 7 | Vandal | Rifle, auto | 9.75/s | 25 | 160 / 40 / 34 |
+| 8 | Guardian | Rifle, semi | 5.25/s | 12 | 195 / 65 / 49 |
+| 9 | Marshal | Sniper, 3.5× scope | 1.5/s | 5 | 202 / 101 / 85 |
+| 0 | Operator | Sniper, 2.5× scope | 0.6/s | 5 | 255 / 150 / 127 |
+
+- **Recoil** kicks the view up for the first shots of a spray, then drifts sideways in a repeatable pattern. Pull down to control it. The spray resets once you stop firing for the weapon's recovery time.
+- **Zoom** (`Mouse 2`): rifles and the Spectre zoom in and get tighter spread. The Marshal and Operator show a full scope and have perfect accuracy only when scoped. Scoped sensitivity scales with the zoom, times the "Scoped multiplier" setting.
+- Holding fire sprays with automatic guns. Semi-automatic guns fire once per click, capped at their fire rate.
+- Bullet holes stay on the walls for a few seconds, so you can see your spray pattern.
+- The gun model on screen shows recoil kick, muzzle flash, reloading and weapon switches. Each gun has its own synthesized gunshot sound.
+- Stats are approximations of the live game.
+
 ## Drills
 
 | Drill | Trains | Scoring |
@@ -21,10 +45,11 @@ To host it on GitHub Pages, go to **Settings → Pages**, deploy from this branc
 | Spidershot | Flicks | Alternates a centre target with a wide flick |
 | Microshot | Precision | Head-sized target at 14 m |
 | Reflex | Reaction | Pop-ups last 750 ms; faster hits score more |
+| Spray Control | Recoil | Spray into a 10-ring bullseye board 10 m away; each bullet scores its ring |
 | Strafe Track | Tracking | Time with the crosshair on a strafing target |
-| Headshot Bots | Crosshair placement | Bots move A-D and stop like players. Head = 160 dmg (one tap), body = 40, legs = 34, bots have 150 HP |
+| Headshot Bots | Crosshair placement | Bots move A-D and stop like players, have 150 HP and take your gun's real damage |
 
-For clicking drills, final score = points × (0.5 + 0.5 × accuracy).
+For target drills, final score = points × (0.5 + 0.5 × accuracy).
 
 ## Sensitivity matching
 
@@ -38,6 +63,6 @@ For clicking drills, final score = points × (0.5 + 0.5 × accuracy).
 
 - A Valorant-style crosshair editor with the in-game colour presets, inner lines, center dot, and outline
 - Score history and personal bests for each drill, saved in `localStorage`
-- Controls: `Esc` pauses, `R` restarts, `Space` plays again
+- Controls: `Mouse 1` fire, `Mouse 2` zoom, `R` reload, `1`–`0` switch gun, `Esc` pause, `Backspace` restart, `Space` play again
 
 Fan-made practice tool. Not affiliated with or endorsed by Riot Games.
