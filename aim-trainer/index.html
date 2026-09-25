@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Range Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #0d1418;
+    --panel: #121c21;
+    --panel-2: #172429;
+    --line: #253740;
+    --line-2: #344a54;
+    --text: #e4ebe9;
+    --muted: #8a9ba0;
+    --accent: #4de3c1;
+    --accent-ink: #052019;
+    --gold: #ffd24a;
+    --bad: #ff5a5f;
+    --display: "Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+    --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font: 15px/1.5 var(--body);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  body.playing #view { cursor: crosshair; }
+  body.playing.cursor-mode #view { cursor: none; }
+
+  /* ---------- overlays ---------- */
+  .screen {
+    position: fixed; inset: 0;
+    overflow-y: auto;
+    background: rgba(9, 15, 18, 0.8);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding-inline: 16px;
+    padding-block: calc(28px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; }
+
+  .brand { display: grid; gap: 6px; }
+  .eyebrow {
+    font: 500 12px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    margin: 0; font: 700 clamp(34px, 6vw, 58px)/0.95 var(--display);
+    letter-spacing: .01em; text-transform: uppercase; text-wrap: balance;
+  }
+  h1 span { color: var(--accent); }
+  .lede { margin: 0; color: var(--muted); max-width: 62ch; }
+
+  .menu-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .menu-grid { grid-template-columns: minmax(0, 1fr); } }
+
+  h2 {
+    margin: 0 0 12px; font: 600 13px/1.2 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+  }
+  .modes { display: grid; gap: 8px; }
+  .mode {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: baseline;
+    text-align: left; padding: 14px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 2px;
+    transition: border-color .15s, background .15s;
+  }
+  .mode:hover { border-color: var(--line-2); background: var(--panel-2); }
+  .mode[aria-checked="true"] { border-color: var(--accent); background: var(--panel-2); }
+  .mode .name { font: 600 19px/1.2 var(--display); letter-spacing: .02em; }
+  .mode[aria-checked="true"] .name { color: var(--accent); }
+  .mode .tag { font: 500 11px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: right; }
+  .mode .desc { grid-column: 1; color: var(--muted); font-size: 14px; }
+  .mode .best { grid-column: 2; font: 500 12px/1.2 var(--mono); color: var(--text); text-align: right; white-space: nowrap; }
+  .mode .best em { font-style: normal; color: var(--muted); }
+
+  .setup { display: grid; gap: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 2px; padding: 18px; display: grid; gap: 14px; }
+  .panel h2 { margin: 0; }
+  .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 420px) { .row-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .field { display: grid; gap: 5px; min-width: 0; }
+  .field > label, .label { font-size: 13px; color: var(--muted); }
+  input[type="number"], select {
+    width: 100%; background: var(--ground); border: 1px solid var(--line); border-radius: 2px;
+    padding: 8px 10px; font: 500 15px/1.2 var(--mono);
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .derived {
+    display: flex; flex-wrap: wrap; gap: 6px 18px; font: 500 13px/1.3 var(--mono); color: var(--muted);
+    border-top: 1px dashed var(--line); padding-top: 12px;
+  }
+  .derived b { color: var(--text); font-weight: 500; }
+  .conv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+
+  /* loadout */
+  #gunPreview { width: 100%; height: 110px; display: block; background: linear-gradient(180deg, #16242b, #101a1f); border: 1px solid var(--line); border-radius: 2px; }
+  .wtitle { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+  .wtitle b { font: 600 22px/1.1 var(--display); letter-spacing: .02em; }
+  .wtitle span { font: 500 11px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .wstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 0; }
+  .wstats div { background: var(--ground); padding: 8px 10px; display: grid; gap: 2px; }
+  .wstats dt { font-size: 11px; color: var(--muted); }
+  .wstats dd { margin: 0; font: 500 14px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .weapons { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+  .weapon {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+    padding: 8px 10px; background: var(--ground); border: 1px solid var(--line); border-radius: 2px; text-align: left;
+    font: 600 14px/1.2 var(--display); letter-spacing: .02em;
+  }
+  .weapon kbd { font: 500 10px/1 var(--mono); color: var(--muted); border: 0; padding: 0; }
+  .weapon:hover { border-color: var(--line-2); }
+  .weapon[aria-checked="true"] { border-color: var(--accent); color: var(--accent); }
+
+  .seg { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); border-radius: 2px; width: fit-content; max-width: 100%; }
+  .seg button { background: transparent; border: 0; padding: 7px 14px; font: 500 13px/1.2 var(--mono); color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .hint { margin: 0; font-size: 13px; color: var(--muted); }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch { width: 28px; height: 28px; border-radius: 2px; border: 2px solid var(--line); padding: 0; }
+  .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--ground) inset; }
+
+  .xh { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 420px) { .xh { grid-template-columns: minmax(0, 1fr); } }
+  #xhPreview { width: 132px; height: 132px; display: block; border: 1px solid var(--line); border-radius: 2px; background: #172731; }
+  .xh-controls { display: grid; gap: 10px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+  .checks label { display: inline-flex; gap: 6px; align-items: center; }
+  .checks input { accent-color: var(--accent); }
+  .slider { display: grid; grid-template-columns: 64px minmax(0, 1fr) 28px; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  .slider output { font: 500 13px var(--mono); color: var(--text); text-align: right; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .btn {
+    border: 1px solid var(--line-2); background: transparent; padding: 12px 22px;
+    font: 600 14px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; border-radius: 2px;
+  }
+  .btn:hover { border-color: var(--text); }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+    padding: 16px 34px; font-size: 16px; border-radius: 0;
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  }
+  .btn-primary:hover { background: #6ff0d2; border-color: #6ff0d2; }
+  .keys { font: 500 12px/1.9 var(--mono); color: var(--muted); }
+  kbd { font: inherit; color: var(--text); border: 1px solid var(--line-2); border-radius: 2px; padding: 0 5px; }
+  .foot { font-size: 12px; color: var(--muted); margin: 0; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; left: 0; right: 0; top: 0; pointer-events: none;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 12px;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 0;
+    text-shadow: 0 1px 3px rgba(0,0,0,.6);
+  }
+  .hud-cell { display: grid; gap: 2px; }
+  .hud-cell.r { text-align: right; }
+  .hud-cell.c { text-align: center; }
+  .hud-k { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .hud-v { font: 600 26px/1 var(--display); font-variant-numeric: tabular-nums; }
+  #hTime { font-size: 34px; }
+  #hTime.low { color: var(--bad); }
+  #ammo {
+    position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    pointer-events: none; display: grid; justify-items: center; gap: 4px; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  }
+  #ammo .count { display: flex; align-items: baseline; gap: 6px; }
+  #aMag { font: 700 38px/1 var(--display); font-variant-numeric: tabular-nums; }
+  #aMag.empty { color: var(--bad); }
+  #aMax { font: 500 15px/1 var(--mono); color: var(--muted); }
+  .rbar { width: 120px; height: 3px; background: rgba(255,255,255,.12); }
+  .rbar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  #countdown {
+    position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%);
+    font: 700 min(26vw, 150px)/1 var(--display); color: var(--accent); pointer-events: none;
+    text-shadow: 0 4px 30px rgba(77,227,193,.35);
+  }
+  #lockHint {
+    position: fixed; left: 50%; top: 62%; transform: translateX(-50%);
+    pointer-events: none; font: 500 13px var(--mono); color: var(--text); text-align: center; width: max-content; max-width: calc(100% - 32px);
+    background: rgba(9,15,18,.75); padding: 8px 12px; border: 1px solid var(--line-2);
+  }
+
+  /* ---------- pause / results ---------- */
+  .card { max-width: 560px; margin: 8vh auto 0; display: grid; gap: 18px; }
+  .card h2 { margin: 0; }
+  .big { font: 700 clamp(56px, 12vw, 96px)/0.9 var(--display); font-variant-numeric: tabular-nums; }
+  .score-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; }
+  .chip { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px; border: 1px solid var(--line-2); color: var(--muted); border-radius: 2px; margin-bottom: 8px; }
+  .chip.new { border-color: var(--gold); color: var(--gold); }
+  .rtitle { font: 600 26px/1.1 var(--display); margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 0; }
+  .stats div { background: var(--panel); padding: 12px 14px; display: grid; gap: 4px; }
+  .stats dt { font-size: 12px; color: var(--muted); }
+  .stats dd { margin: 0; font: 500 18px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+  .spark { display: grid; gap: 6px; }
+  #rSpark { width: 100%; height: 90px; display: block; }
+  .msg { margin: 0; color: var(--muted); }
+
+  #toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    background: var(--panel-2); border: 1px solid var(--line-2); padding: 10px 14px; font-size: 14px;
+    max-width: calc(100% - 32px); border-radius: 2px; z-index: 10;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="3D shooting range"></canvas>
+
+<div id="hud" hidden>
+  <div class="hud-cell"><span class="hud-k">Score</span><span class="hud-v" id="hScore">0</span></div>
+  <div class="hud-cell c"><span class="hud-v" id="hTime">60.0</span><span class="hud-k" id="hMode">Gridshot</span></div>
+  <div class="hud-cell r"><span class="hud-k" id="hAccK">Accuracy</span><span class="hud-v" id="hAcc">–</span></div>
+</div>
+<div id="ammo" hidden>
+  <span class="hud-k" id="aName">Vandal</span>
+  <div class="count"><span id="aMag">25</span><span id="aMax">/ 25</span></div>
+  <div class="rbar"><i id="aBar"></i></div>
+</div>
+<div id="countdown" hidden>3</div>
+<div id="lockHint" hidden>Click to capture your mouse</div>
+
+<section id="menu" class="screen">
+  <div class="wrap">
+    <header class="brand">
+      <span class="eyebrow">Aim trainer · Valorant yaw 0.07° per count</span>
+      <h1>Range <span>Protocol</span></h1>
+      <p class="lede">Warm up in a 3D range with Valorant's guns and your exact in-game sensitivity. Pick a drill and a weapon, enter your sens and DPI, and click Start.</p>
+    </header>
+
+    <div class="menu-grid">
+      <div>
+        <h2 id="drillsH">Drills</h2>
+        <div class="modes" id="modes" role="radiogroup" aria-labelledby="drillsH"></div>
+      </div>
+
+      <div class="setup">
+        <div class="panel">
+          <h2>Loadout</h2>
+          <canvas id="gunPreview" aria-label="Selected weapon"></canvas>
+          <div class="wtitle"><b id="wName">Vandal</b><span id="wClass">Rifle · full auto</span></div>
+          <dl class="wstats" id="wStats"></dl>
+          <div class="weapons" id="weapons" role="radiogroup" aria-label="Weapon"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Sensitivity</h2>
+          <div class="row row-3">
+            <div class="field"><label for="sens">Valorant sens</label><input id="sens" type="number" min="0.01" max="10" step="0.001"></div>
+            <div class="field"><label for="dpi">Mouse DPI</label><input id="dpi" type="number" min="100" max="32000" step="50"></div>
+            <div class="field"><label for="zoomSens">Scoped multiplier</label><input id="zoomSens" type="number" min="0.1" max="3" step="0.01"></div>
+          </div>
+          <div class="derived" id="derived"></div>
+          <div class="conv">
+            <div class="field"><label for="convGame">Convert from</label>
+              <select id="convGame">
+                <option value="3.181818">CS2 / Apex</option>
+                <option value="10.6">Overwatch 2</option>
+              </select>
+            </div>
+            <div class="field"><label for="convVal">Their sens</label><input id="convVal" type="number" min="0" step="0.01" placeholder="1.2"></div>
+            <button class="btn" id="convApply" type="button">Use</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Session</h2>
+          <div class="field"><span class="label">Drill length</span>
+            <div class="seg" id="durSeg">
+              <button type="button" data-dur="30">30 s</button><button type="button" data-dur="60">60 s</button><button type="button" data-dur="90">90 s</button>
+            </div>
+          </div>
+          <div class="field"><span class="label">Mouse input</span>
+            <div class="seg" id="inputSeg">
+              <button type="button" data-input="lock">Raw (pointer lock)</button><button type="button" data-input="cursor">Cursor / touch</button>
+            </div>
+            <p class="hint" id="inputHint"></p>
+          </div>
+          <div class="row">
+            <div class="field"><span class="label">Target colour</span><div class="swatches" id="tcol"></div></div>
+            <div class="field"><label for="vol">Volume</label><input id="vol" type="range" min="0" max="1" step="0.05"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Crosshair</h2>
+          <div class="xh">
+            <canvas id="xhPreview" width="132" height="132" aria-label="Crosshair preview"></canvas>
+            <div class="xh-controls">
+              <div class="swatches" id="xhCol"></div>
+              <div class="checks">
+                <label><input type="checkbox" id="xhInner"> Inner lines</label>
+                <label><input type="checkbox" id="xhDot"> Center dot</label>
+                <label><input type="checkbox" id="xhOutline"> Outline</label>
+              </div>
+              <div class="slider"><label for="xhLen">Length</label><input type="range" id="xhLen" min="1" max="20" step="1"><output id="xhLenO"></output></div>
+              <div class="slider"><label for="xhThick">Thickness</label><input type="range" id="xhThick" min="1" max="6" step="1"><output id="xhThickO"></output></div>
+              <div class="slider"><label for="xhGap">Offset</label><input type="range" id="xhGap" min="0" max="20" step="1"><output id="xhGapO"></output></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="start" type="button">Start Gridshot</button>
+      <span class="keys"><kbd>Mouse 1</kbd> fire · <kbd>Mouse 2</kbd> zoom · <kbd>R</kbd> reload · <kbd>1</kbd>–<kbd>0</kbd> switch gun · <kbd>Esc</kbd> pause · <kbd>Backspace</kbd> restart</span>
+    </div>
+    <p class="foot">Fan-made practice tool. Not affiliated with or endorsed by Riot Games. Weapon stats follow the live game closely but are approximations. Scores are kept in this browser only.</p>
+  </div>
+</section>
+
+<section id="pause" class="screen" hidden>
+  <div class="card">
+    <h2>Paused</h2>
+    <p class="rtitle" id="pMode">Gridshot</p>
+    <p class="msg" id="pMsg">Your mouse was released. Resume to keep going.</p>
+    <div class="actions">
+      <button class="btn-primary" id="resume" type="button">Resume</button>
+      <button class="btn" id="pRestart" type="button">Restart</button>
+      <button class="btn" id="pQuit" type="button">Quit to menu</button>
+    </div>
+  </div>
+</section>
+
+<section id="results" class="screen" hidden>
+  <div class="card">
+    <h2 id="rMode">Gridshot</h2>
+    <div class="score-row"><span class="big" id="rScore">0</span><span class="chip" id="rBest">Best 0</span></div>
+    <p class="msg" id="rHead"></p>
+    <dl class="stats" id="rStats"></dl>
+    <div class="spark">
+      <span class="label">Last runs of this drill</span>
+      <canvas id="rSpark" aria-label="Score history"></canvas>
+    </div>
+    <div class="actions">
+      <button class="btn-primary" id="again" type="button">Play again</button>
+      <button class="btn" id="toMenu" type="button">Change drill</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" role="status" hidden></div>
+
+<script>
+'use strict';
+(() => {
+const $ = (s) => document.querySelector(s);
+const DEG = Math.PI / 180;
+const YAW_PER_COUNT = 0.07;          // Valorant: degrees turned per mouse count at sens 1
+const NEAR = 0.05;
+const TAN_V = Math.tan(51.5 * DEG) * 9 / 16; // 103° horizontal FOV at 16:9
+
+/* ---------------- weapons ----------------
+   dmg: [max range m, head, body, legs] brackets. spread/grow/errMax in degrees.
+   kick: vertical view kick per shot (deg) for the first `climb` shots, sway: horizontal drift after that.
+   recover: seconds without firing before the spray pattern resets. */
+const WEAPONS = [
+  { id: 'classic', cost: 0, name: 'Classic', cls: 'Sidearm', auto: false, rate: 6.75, mag: 12, reload: 1.75, dmg: [[30, 78, 26, 22], [50, 66, 22, 18]],
+    spread: 0.4, grow: 0.35, errMax: 2.5, kick: 0.5, climb: 4, sway: 0.15, recover: 0.25, zoom: 1, seed: 1.1, accent: '#8fa3ad',
+    sound: { f: 2800, d: 0.09, thump: 140, vol: 0.7 }, look: { pistol: true, recv: 96, recvH: 26, barrel: 8, barrelH: 10, grip: 14, gripH: 62 } },
+  { id: 'ghost', cost: 500, name: 'Ghost', cls: 'Sidearm', auto: false, rate: 6.75, mag: 15, reload: 1.5, dmg: [[30, 105, 30, 25], [50, 88, 25, 21]],
+    spread: 0.3, grow: 0.3, errMax: 2, kick: 0.45, climb: 4, sway: 0.12, recover: 0.22, zoom: 1, seed: 2.3, accent: '#9aa7ae',
+    sound: { f: 1500, d: 0.07, thump: 110, vol: 0.45 }, look: { pistol: true, recv: 100, recvH: 26, supp: 62, suppH: 15, grip: 14, gripH: 62 } },
+  { id: 'sheriff', cost: 800, name: 'Sheriff', cls: 'Sidearm', auto: false, rate: 4, mag: 6, reload: 2.25, dmg: [[30, 159, 55, 46], [50, 145, 50, 42]],
+    spread: 0.25, grow: 1.2, errMax: 3, kick: 1.9, climb: 3, sway: 0.4, recover: 0.38, zoom: 1, seed: 0.4, accent: '#b98d4d',
+    sound: { f: 3200, d: 0.2, thump: 90, vol: 1 }, look: { pistol: true, recv: 70, recvH: 28, cyl: true, barrel: 78, barrelH: 13, grip: 8, gripH: 60 } },
+  { id: 'spectre', cost: 1600, name: 'Spectre', cls: 'SMG', auto: true, rate: 13.33, mag: 30, reload: 2.25, dmg: [[20, 78, 26, 22], [50, 66, 22, 18]],
+    spread: 0.4, grow: 0.12, errMax: 1.6, kick: 0.3, climb: 7, sway: 0.24, recover: 0.2, zoom: 1.15, seed: 3.7, accent: '#6fb3c8',
+    sound: { f: 1700, d: 0.06, thump: 120, vol: 0.5 }, look: { stock: 58, stockThin: true, recv: 118, recvH: 30, guard: 36, supp: 78, suppH: 18, grip: 28, mag: { at: 78, w: 20, h: 70, curve: 2 } } },
+  { id: 'bulldog', cost: 2050, name: 'Bulldog', cls: 'Rifle', auto: true, rate: 9.15, mag: 24, reload: 2.5, dmg: [[50, 116, 35, 30]],
+    spread: 0.3, grow: 0.2, errMax: 2.2, kick: 0.42, climb: 7, sway: 0.3, recover: 0.3, zoom: 1.25, seed: 5.1, accent: '#a9a06a',
+    sound: { f: 2600, d: 0.11, thump: 100, vol: 0.85 }, look: { stock: 78, recv: 138, recvH: 32, guard: 58, guardH: 24, barrel: 40, grip: 30, mag: { at: 94, w: 26, h: 52, curve: 4 }, scope: { at: 48, len: 50, h: 15 } } },
+  { id: 'phantom', cost: 2900, name: 'Phantom', cls: 'Rifle', auto: true, rate: 11, mag: 30, reload: 2.5, dmg: [[15, 156, 39, 33], [30, 140, 35, 29], [50, 124, 31, 26]],
+    spread: 0.2, grow: 0.14, errMax: 2, kick: 0.36, climb: 8, sway: 0.27, recover: 0.28, zoom: 1.25, seed: 0.9, accent: '#8d9aa8',
+    sound: { f: 1400, d: 0.08, thump: 95, vol: 0.55 }, look: { stock: 84, recv: 150, recvH: 32, guard: 56, guardH: 24, barrel: 8, supp: 92, suppH: 19, grip: 30, mag: { at: 100, w: 26, h: 64, curve: 6 } } },
+  { id: 'vandal', cost: 2900, name: 'Vandal', cls: 'Rifle', auto: true, rate: 9.75, mag: 25, reload: 2.5, dmg: [[50, 160, 40, 34]],
+    spread: 0.25, grow: 0.18, errMax: 2.4, kick: 0.46, climb: 9, sway: 0.34, recover: 0.3, zoom: 1.25, seed: 4.2, accent: '#c9793a',
+    sound: { f: 3000, d: 0.13, thump: 85, vol: 0.95 }, look: { stock: 90, recv: 160, recvH: 32, guard: 70, guardH: 22, barrel: 66, barrelH: 8, grip: 32, mag: { at: 100, w: 26, h: 72, curve: 22 } } },
+  { id: 'guardian', cost: 2250, name: 'Guardian', cls: 'Rifle', auto: false, rate: 5.25, mag: 12, reload: 2.5, dmg: [[50, 195, 65, 49]],
+    spread: 0.1, grow: 0.5, errMax: 2, kick: 0.9, climb: 4, sway: 0.2, recover: 0.3, zoom: 1.5, seed: 2.8, accent: '#7fb28f',
+    sound: { f: 3400, d: 0.16, thump: 80, vol: 1 }, look: { stock: 90, recv: 150, recvH: 30, guard: 90, guardH: 20, barrel: 88, barrelH: 8, grip: 30, mag: { at: 104, w: 22, h: 44, curve: 4 }, scope: { at: 40, len: 80, h: 19 } } },
+  { id: 'marshal', cost: 950, name: 'Marshal', cls: 'Sniper', auto: false, rate: 1.5, mag: 5, reload: 2.5, dmg: [[50, 202, 101, 85]], scope: true,
+    spread: 1, scopedSpread: 0, grow: 0, errMax: 0, kick: 1.6, climb: 1, sway: 0.1, recover: 0.45, zoom: 3.5, seed: 1.7, accent: '#9b8fc4',
+    sound: { f: 3600, d: 0.22, thump: 70, vol: 1 }, look: { stock: 100, stockThin: true, recv: 130, recvH: 28, guard: 60, guardH: 18, barrel: 150, barrelH: 7, grip: 30, mag: { at: 92, w: 18, h: 26, curve: 0 }, scope: { at: 20, len: 110, h: 22 } } },
+  { id: 'operator', cost: 4700, name: 'Operator', cls: 'Sniper', auto: false, rate: 0.6, mag: 5, reload: 3.7, dmg: [[50, 255, 150, 127]], scope: true,
+    spread: 5, scopedSpread: 0, grow: 0, errMax: 0, kick: 3, climb: 1, sway: 0.2, recover: 0.6, zoom: 2.5, seed: 3.3, accent: '#c46a6a',
+    sound: { f: 2600, d: 0.38, thump: 55, vol: 1.2 }, look: { stock: 110, recv: 170, recvH: 36, guard: 90, guardH: 22, barrel: 170, barrelH: 10, grip: 32, mag: { at: 112, w: 28, h: 40, curve: 0 }, scope: { at: 20, len: 150, h: 32 } } },
+];
+const WMAP = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
+function damageAt(w, dist, part) {
+  const b = w.dmg.find((r) => dist <= r[0]) || w.dmg[w.dmg.length - 1];
+  return part === 'head' ? b[1] : part === 'legs' ? b[3] : b[2];
+}
+
+/* ---------------- storage ---------------- */
+const store = {
+  get(k, f) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } },
+};
+const coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+const DEFAULTS = {
+  mode: 'gridshot', weapon: 'vandal', sens: 0.35, dpi: 800, zoomSens: 1, duration: 60, cursorMode: coarse, volume: 0.5, targetColor: '#ff4d57',
+  xh: { color: '#00ffff', inner: true, dot: false, outline: true, outlineAlpha: 0.5, innerLen: 6, innerThick: 2, innerGap: 3, dotSize: 2 },
+};
+const saved = store.get('rp.v1.settings', {});
+const S = Object.assign({}, DEFAULTS, saved, { xh: Object.assign({}, DEFAULTS.xh, saved.xh || {}) });
+if (!WMAP[S.weapon]) S.weapon = DEFAULTS.weapon;
+const history = store.get('rp.v1.history', {});
+const saveSettings = () => store.set('rp.v1.settings', S);
+
+/* ---------------- canvas + camera ---------------- */
+const canvas = $('#view');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1, FL0 = 1, FL = 1;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  FL0 = FL = (H / 2) / TAN_V;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// yaw/pitch are where the player aims; kickY/kickP are the weapon's recoil added on top.
+const cam = { yaw: 0, pitch: 0, kickY: 0, kickP: 0, F: [0, 0, 1], R: [1, 0, 0], U: [0, 1, 0] };
+function updateBasis() {
+  const yw = cam.yaw + cam.kickY * DEG, pt = Math.max(-89.9 * DEG, Math.min(89.9 * DEG, cam.pitch + cam.kickP * DEG));
+  const cy = Math.cos(yw), sy = Math.sin(yw), cp = Math.cos(pt), sp = Math.sin(pt);
+  cam.F = [cp * sy, sp, cp * cy];
+  cam.R = [cy, 0, -sy];
+  cam.U = [-sp * sy, cp, -sp * cy];
+}
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const norm = (a) => { const n = Math.hypot(a[0], a[1], a[2]); return [a[0] / n, a[1] / n, a[2] / n]; };
+const toCam = (p) => [dot(p, cam.R), dot(p, cam.U), dot(p, cam.F)];
+const proj = (c) => [W / 2 + c[0] / c[2] * FL, H / 2 - c[1] / c[2] * FL];
+const toNear = (a, b) => { const s = (NEAR - a[2]) / (b[2] - a[2]); return [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s, NEAR]; };
+function clipSeg(a, b) {
+  if (a[2] < NEAR && b[2] < NEAR) return null;
+  if (a[2] < NEAR) a = toNear(a, b); else if (b[2] < NEAR) b = toNear(b, a);
+  return [a, b];
+}
+function clipPoly(pts) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const ain = a[2] >= NEAR, bin = b[2] >= NEAR;
+    if (ain) out.push(a);
+    if (ain !== bin) out.push(toNear(a, b));
+  }
+  return out;
+}
+
+/* ---------------- the room ---------------- */
+const ROOM = { x0: -18, x1: 18, y0: -1.6, y1: 7, z0: -6, z1: 34 };
+const FACES = [], LINES = [];
+(() => {
+  const { x0, x1, y0, y1, z0, z1 } = ROOM;
+  FACES.push({ c: '#0e171b', p: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]] });
+  FACES.push({ c: '#0a1114', p: [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]] });
+  FACES.push({ c: '#131f25', p: [[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1]] });
+  FACES.push({ c: '#131f25', p: [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]] });
+  FACES.push({ c: '#172731', p: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]] });
+  FACES.push({ c: '#111c21', p: [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]] });
+  for (let x = x0; x <= x1; x += 2) {
+    LINES.push([[x, y0, z0], [x, y0, z1]], [[x, y1, z0], [x, y1, z1]], [[x, y0, z1], [x, y1, z1]], [[x, y0, z0], [x, y1, z0]]);
+  }
+  for (let z = z0; z <= z1; z += 2) {
+    LINES.push([[x0, y0, z], [x1, y0, z]], [[x0, y1, z], [x1, y1, z]], [[x0, y0, z], [x0, y1, z]], [[x1, y0, z], [x1, y1, z]]);
+  }
+  for (let y = y0; y <= y1 + 1e-6; y += 2) {
+    LINES.push([[x0, y, z1], [x1, y, z1]], [[x0, y, z0], [x1, y, z0]], [[x0, y, z0], [x0, y, z1]], [[x1, y, z0], [x1, y, z1]]);
+  }
+})();
+function rayRoom(d) {
+  let t = Infinity;
+  const b = ROOM;
+  if (d[0]) t = Math.min(t, (d[0] > 0 ? b.x1 : b.x0) / d[0]);
+  if (d[1]) t = Math.min(t, (d[1] > 0 ? b.y1 : b.y0) / d[1]);
+  if (d[2]) t = Math.min(t, (d[2] > 0 ? b.z1 : b.z0) / d[2]);
+  return t;
+}
+
+function strokeWorldLine(a, b) {
+  const s = clipSeg(toCam(a), toCam(b));
+  if (!s) return;
+  const p = proj(s[0]), q = proj(s[1]);
+  ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]);
+}
+function renderRoom() {
+  for (const f of FACES) {
+    const pts = clipPoly(f.p.map(toCam));
+    if (pts.length < 3) continue;
+    ctx.fillStyle = f.c;
+    ctx.beginPath();
+    pts.forEach((c, i) => { const p = proj(c); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(120, 205, 190, 0.09)';
+  ctx.beginPath();
+  for (const l of LINES) strokeWorldLine(l[0], l[1]);
+  ctx.stroke();
+  // lane centre line and distance markers on the floor, in metres
+  ctx.strokeStyle = 'rgba(77, 227, 193, 0.22)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); strokeWorldLine([0, ROOM.y0, 1], [0, ROOM.y0, ROOM.z1]); ctx.stroke();
+  ctx.fillStyle = 'rgba(77, 227, 193, 0.35)';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (const z of [5, 10, 20, 30]) {
+    const c = toCam([0.35, ROOM.y0, z]);
+    if (c[2] < 0.8) continue;
+    const p = proj(c);
+    ctx.font = `600 ${Math.max(7, 0.42 * FL / c[2])}px "JetBrains Mono", monospace`;
+    ctx.fillText(z + ' m', p[0], p[1]);
+  }
+}
+function vignette(strength) {
+  const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${strength})`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+/* ---------------- colour helpers ---------------- */
+function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function mix(h, to, a) { const c = hexRgb(h); return `rgb(${c.map((v, i) => Math.round(v + (to[i] - v) * a)).join(',')})`; }
+let TP = null;
+function targetPalette() {
+  TP = { base: S.targetColor, hi: mix(S.targetColor, [255, 255, 255], 0.55), lo: mix(S.targetColor, [0, 0, 0], 0.55), lit: mix(S.targetColor, [255, 255, 255], 0.3) };
+}
+targetPalette();
+
+/* ---------------- ray tests ---------------- */
+function raySphere(d, p, r) {
+  const t = dot(p, d);
+  if (t <= 0) return -1;
+  return dot(p, p) - t * t <= r * r ? t : -1;
+}
+function rayCapsule(d, a, b, r) {
+  const v = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const B = dot(d, v), C = dot(v, v), D = -dot(d, a), E = -dot(v, a);
+  const den = C - B * B;
+  let t = den > 1e-9 ? (B * E - C * D) / den : -D;
+  let s = den > 1e-9 ? (E - B * D) / den : 0;
+  s = Math.max(0, Math.min(1, s));
+  const q = [a[0] + v[0] * s, a[1] + v[1] * s, a[2] + v[2] * s];
+  t = Math.max(0, dot(q, d));
+  s = Math.max(0, Math.min(1, (dot([d[0] * t - a[0], d[1] * t - a[1], d[2] * t - a[2]], v)) / C));
+  const q2 = [a[0] + v[0] * s - d[0] * t, a[1] + v[1] * s - d[1] * t, a[2] + v[2] * s - d[2] * t];
+  return t > 0 && dot(q2, q2) <= r * r ? t : -1;
+}
+function botParts(b) {
+  return [
+    { part: 'head', kind: 's', p: [b.x, 0, b.z], r: 0.12 },
+    { part: 'body', kind: 'c', a: [b.x, -0.85, b.z], b: [b.x, -0.3, b.z], r: 0.21 },
+    { part: 'legs', kind: 'c', a: [b.x, -1.42, b.z], b: [b.x, -0.95, b.z], r: 0.16 },
+  ];
+}
+function pick(d) {
+  let best = null;
+  for (const tg of G.targets) {
+    if (tg.type === 'sphere') {
+      const t = raySphere(d, tg.p, tg.r);
+      if (t > 0 && (!best || t < best.t)) best = { tg, t, part: 'body' };
+    } else if (tg.type === 'board') {
+      if (d[2] <= 0) continue;
+      const t = tg.p[2] / d[2];
+      const off = Math.hypot(d[0] * t - tg.p[0], d[1] * t - tg.p[1]);
+      if (off <= tg.r && (!best || t < best.t)) best = { tg, t, part: 'body', ring: 10 - Math.min(9, Math.floor(off / (tg.r / 10))) };
+    } else {
+      for (const pt of botParts(tg)) {
+        const t = pt.kind === 's' ? raySphere(d, pt.p, pt.r) : rayCapsule(d, pt.a, pt.b, pt.r);
+        if (t > 0) { if (!best || t < best.t) best = { tg, t, part: pt.part }; break; }
+      }
+    }
+  }
+  return best;
+}
+const mouse = { x: 0, y: 0 };
+function aimDir() {
+  if (!G || !G.cursor) return cam.F;
+  const sx = (mouse.x - W / 2) / FL, sy = -(mouse.y - H / 2) / FL;
+  return norm([0, 1, 2].map((i) => cam.F[i] + cam.R[i] * sx + cam.U[i] * sy));
+}
+
+/* ---------------- audio ---------------- */
+let AC = null, NOISE = null;
+function ensureAudio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+  if (AC && AC.state === 'suspended') AC.resume();
+}
+const SFX = {
+  hit: [900, 1350, 0.07, 'triangle'], head: [1500, 2300, 0.13, 'sine'], kill: [700, 1050, 0.1, 'triangle'],
+  miss: [240, 170, 0.05, 'sine'], tick: [520, 520, 0.06, 'square'], go: [880, 880, 0.2, 'square'],
+};
+function sfx(kind, vol) {
+  if (!AC || S.volume <= 0) return;
+  const c = SFX[kind], t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain();
+  o.type = c[3];
+  o.frequency.setValueAtTime(c[0], t);
+  o.frequency.exponentialRampToValueAtTime(c[1], t + c[2]);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.22 * S.volume * (vol || 1), t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + c[2]);
+  o.connect(g).connect(AC.destination);
+  o.start(t); o.stop(t + c[2] + 0.03);
+}
+// Gunshots: filtered noise burst plus a low thump, shaped per weapon.
+function gunSound(s) {
+  if (!AC || S.volume <= 0) return;
+  if (!NOISE) {
+    NOISE = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.5), AC.sampleRate);
+    const d = NOISE.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const t = AC.currentTime, v = 0.3 * S.volume * s.vol;
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = NOISE;
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(s.f, t);
+  f.frequency.exponentialRampToValueAtTime(Math.max(180, s.f * 0.2), t + s.d);
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + s.d);
+  src.connect(f).connect(g).connect(AC.destination);
+  src.start(t, Math.random() * 0.2); src.stop(t + s.d + 0.02);
+  if (s.thump) {
+    const o = AC.createOscillator(), og = AC.createGain();
+    o.frequency.setValueAtTime(s.thump, t);
+    o.frequency.exponentialRampToValueAtTime(s.thump * 0.5, t + 0.09);
+    og.gain.setValueAtTime(v * 0.9, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    o.connect(og).connect(AC.destination);
+    o.start(t); o.stop(t + 0.13);
+  }
+}
+const clickSound = () => gunSound({ f: 6000, d: 0.035, thump: 0, vol: 0.35 });
+
+/* ---------------- drills ---------------- */
+const rand = (a, b) => a + Math.random() * (b - a);
+const sign = () => (Math.random() < 0.5 ? -1 : 1);
+const fromAngles = (yd, pd, dist) => {
+  const y = yd * DEG, p = pd * DEG;
+  return [dist * Math.cos(p) * Math.sin(y), dist * Math.sin(p), dist * Math.cos(p) * Math.cos(y)];
+};
+let G = null;
+const sphere = (p, r, extra) => Object.assign({ type: 'sphere', p, r, born: G.t }, extra || {});
+const remove = (g, tg) => { g.targets = g.targets.filter((x) => x !== tg); };
+function kill(g, tg, pts) {
+  g.stats.kills++;
+  g.points += pts;
+  g.stats.ttk.push((g.t - Math.max(tg.born, g.lastKill)) * 1000);
+  g.lastKill = g.t;
+}
+function gridSpawn(g) {
+  const taken = new Set(g.targets.map((t) => t.cell));
+  const free = g.cells.map((_, i) => i).filter((i) => !taken.has(i) && i !== g.lastCell);
+  const i = free[Math.floor(Math.random() * free.length)];
+  g.targets.push(sphere(g.cells[i].slice(), 0.42, { cell: i }));
+}
+function flickSpawn(g) {
+  const p = g.center ? [0, 0.2, 12] : fromAngles(sign() * rand(8, 36), rand(-6, 18), 12);
+  g.targets.push(sphere(p, 0.4, { center: g.center }));
+  g.center = !g.center;
+}
+
+const MODES = {
+  gridshot: {
+    name: 'Gridshot', tag: 'Speed', desc: 'Three targets on a 5 × 5 wall grid. A new one appears after every hit.',
+    init(g) {
+      g.cells = [];
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) g.cells.push([(i - 2) * 1.25, (j - 2) * 1.25 + 0.4, 12]);
+      g.lastCell = -1;
+      for (let k = 0; k < 3; k++) gridSpawn(g);
+    },
+    update() {},
+    hit(g, tg) { remove(g, tg); kill(g, tg, 100); g.lastCell = tg.cell; gridSpawn(g); sfx('hit', 0.6); },
+  },
+  flick: {
+    name: 'Spidershot', tag: 'Flicks', desc: 'Alternate between a centre target and a wide flick. Trains snapping out and resetting.',
+    init(g) { g.center = true; flickSpawn(g); },
+    update() {},
+    hit(g, tg) { remove(g, tg); kill(g, tg, tg.center ? 60 : 100); flickSpawn(g); sfx('hit', 0.6); },
+  },
+  micro: {
+    name: 'Microshot', tag: 'Precision', desc: 'One small target at a time, head-sized at 14 m. Slow down and click cleanly.',
+    init(g) { this.spawn(g); },
+    spawn(g) { g.targets.push(sphere(fromAngles(rand(-22, 22), rand(-4, 12), 14), 0.16)); },
+    update() {},
+    hit(g, tg) { remove(g, tg); kill(g, tg, 100); this.spawn(g); sfx('hit', 0.6); },
+  },
+  reflex: {
+    name: 'Reflex', tag: 'Reaction', desc: 'Targets pop up for 750 ms and vanish. Faster hits score more.',
+    init(g) { g.next = 0.6; },
+    update(g) {
+      for (const tg of g.targets) {
+        if (g.t - tg.born > tg.ttl) { remove(g, tg); g.stats.expired++; g.next = g.t + rand(0.25, 0.7); sfx('miss'); }
+      }
+      if (!g.targets.length && g.t >= g.next) g.targets.push(sphere(fromAngles(rand(-30, 30), rand(-4, 14), 12), 0.32, { ttl: 0.75 }));
+    },
+    hit(g, tg) {
+      remove(g, tg);
+      kill(g, tg, 50 + Math.round(100 * (1 - (g.t - tg.born) / tg.ttl)));
+      g.next = g.t + rand(0.25, 0.7);
+      sfx('hit', 0.6);
+    },
+  },
+  spray: {
+    name: 'Spray Control', tag: 'Recoil', desc: 'Empty magazines into a bullseye board 10 m away. Pull down against the recoil to keep the group tight.',
+    init(g) { g.targets.push({ type: 'board', p: [0, 0, 10], r: 0.9, born: 0 }); },
+    update() {},
+    hit(g, tg, part, info) { g.points += info.ring; g.stats.ringSum += info.ring; },
+  },
+  tracking: {
+    name: 'Strafe Track', tag: 'Tracking', desc: 'Keep your crosshair on a target that strafes and changes speed. Scored on time on target.',
+    noShoot: true,
+    init(g) { g.targets.push(sphere([0, 0.2, 13], 0.45, { vx: 3, turnAt: 0.8 })); },
+    update(g, dt) {
+      const tg = g.targets[0];
+      if (g.t >= tg.turnAt) { tg.vx = sign() * rand(2.5, 6.5); tg.turnAt = g.t + rand(0.3, 1.1); }
+      tg.p[0] += tg.vx * dt;
+      if (Math.abs(tg.p[0]) > 7) { tg.p[0] = Math.sign(tg.p[0]) * 7; tg.vx *= -1; }
+      tg.p[1] = 0.2 + Math.sin(g.t * 1.1) * 0.9 + Math.sin(g.t * 2.7) * 0.25;
+      const on = !!pick(aimDir());
+      tg.lit = on;
+      g.stats.trackTime += dt;
+      if (on) g.stats.onTarget += dt;
+      g.points = Math.round(g.stats.onTarget * 100);
+    },
+    hit() {},
+  },
+  duel: {
+    name: 'Headshot Bots', tag: 'Crosshair placement', desc: 'Bots strafe and stop like real players and take real weapon damage with 150 HP. Bot heads sit at your eye level.',
+    init(g) { g.respawn = 0.4; },
+    update(g, dt) {
+      if (!g.targets.length && g.t >= g.respawn) {
+        g.targets.push({ type: 'bot', x: rand(-7, 7), z: rand(12, 24), vx: 0, hp: 150, born: g.t, nextAt: g.t + rand(0.15, 0.45), flash: -1 });
+      }
+      for (const b of g.targets) {
+        if (g.t >= b.nextAt) {
+          if (Math.random() < 0.3) { b.vx = 0; b.nextAt = g.t + rand(0.15, 0.4); }
+          else { b.vx = sign() * 4.4; b.nextAt = g.t + rand(0.25, 0.8); }
+        }
+        b.x += b.vx * dt;
+        if (Math.abs(b.x) > 9) { b.x = Math.sign(b.x) * 9; b.vx *= -1; }
+      }
+    },
+    hit(g, tg, part, info) {
+      g.stats[part]++;
+      tg.hp -= info.dmg;
+      tg.flash = g.t;
+      if (tg.hp <= 0) {
+        remove(g, tg);
+        kill(g, tg, part === 'head' ? 150 : 100);
+        g.respawn = g.t + rand(0.3, 0.6);
+        sfx(part === 'head' ? 'head' : 'kill');
+      } else sfx('hit', 0.6);
+    },
+  },
+};
+
+/* ---------------- weapon state ---------------- */
+function newWeapon(id, t) {
+  return { def: WMAP[id], ammo: WMAP[id].mag, cool: 0, reloading: false, reloadEnd: 0, zoomed: false, zoomCur: 1,
+    idx: 0, lastShot: -99, equipUntil: t + 0.35, equipAt: performance.now(), flash: -1, kick: 0 };
+}
+const input = { held: false, press: -1 };
+function switchWeapon(id) {
+  if (!WMAP[id]) return;
+  S.weapon = id; saveSettings();
+  if (G) {
+    if (G.w.def.id === id) return;
+    G.w = newWeapon(id, G.t);
+    cam.kickP = cam.kickY = 0;
+    G.weaponsUsed.add(WMAP[id].name);
+    $('#aName').textContent = WMAP[id].name;
+    clickSound();
+  }
+  renderWeapons();
+}
+function startReload(g) {
+  const w = g.w;
+  if (w.reloading || w.ammo === w.def.mag) return;
+  w.reloading = true; w.zoomed = false;
+  w.reloadEnd = g.t + w.def.reload;
+  clickSound();
+}
+function toggleZoom() {
+  if (!G || G.cursor || G.w.reloading || G.w.def.zoom <= 1) return;
+  if (G.state !== 'running' && G.state !== 'countdown') return;
+  G.w.zoomed = !G.w.zoomed;
+}
+function fire(g) {
+  const w = g.w, d = w.def;
+  w.ammo--;
+  g.stats.shots++;
+  w.idx = g.t - w.lastShot > d.recover ? 0 : w.idx + 1;
+  w.lastShot = g.t;
+  const scoped = d.scope && w.zoomCur > 1 + (d.zoom - 1) * 0.85;
+  let spread = d.scope ? (scoped ? d.scopedSpread : d.spread) : d.spread * (w.zoomed ? 0.75 : 1);
+  spread += Math.min(d.errMax, d.grow * Math.max(0, w.idx - 1));
+  const a = Math.random() * Math.PI * 2, r = spread * Math.sqrt(Math.random()) * DEG;
+  const base = aimDir();
+  const dir = norm([0, 1, 2].map((i) => base[i] + cam.R[i] * Math.tan(r * Math.cos(a)) + cam.U[i] * Math.tan(r * Math.sin(a))));
+  const hit = pick(dir);
+  const wallT = rayRoom(dir);
+  const now = performance.now();
+  if (hit && hit.t < wallT) {
+    g.stats.hits++;
+    g.markers.push({ t: now, head: hit.part === 'head' });
+    MODES[g.mode].hit(g, hit.tg, hit.part, { dmg: damageAt(d, hit.t, hit.part), ring: hit.ring || 0 });
+    if (hit.tg.type === 'board') g.decals.push({ p: dir.map((v) => v * (hit.t - 0.01)), t: now, board: true });
+  } else {
+    g.decals.push({ p: dir.map((v) => v * (wallT - 0.01)), t: now });
+  }
+  if (g.decals.length > 140) g.decals.splice(0, g.decals.length - 140);
+  // recoil: climb for the first shots, then drift sideways in a repeatable pattern
+  const n = w.idx;
+  cam.kickP += d.kick * (n < d.climb ? 1 : 0.18) * rand(0.9, 1.1);
+  if (n >= 2) cam.kickY += d.sway * (Math.sin(n * 0.75 + d.seed) * 1.6 + rand(-0.3, 0.3));
+  w.flash = now; w.kick = 1;
+  gunSound(d.sound);
+  if (w.ammo <= 0) startReload(g);
+}
+function weaponTick(g, dt) {
+  const w = g.w, d = w.def;
+  const target = w.zoomed ? d.zoom : 1;
+  w.zoomCur += (target - w.zoomCur) * Math.min(1, dt * 16);
+  if (Math.abs(target - w.zoomCur) < 0.002) w.zoomCur = target;
+  w.kick = Math.max(0, w.kick - dt * 9);
+  if (g.state !== 'running') return;
+  if (w.reloading && g.t >= w.reloadEnd) { w.reloading = false; w.ammo = d.mag; clickSound(); }
+  if (g.t - w.lastShot > 1.1 / d.rate) {
+    const k = Math.exp(-dt / (d.recover * 0.4));
+    cam.kickP *= k; cam.kickY *= k;
+  }
+  if (MODES[g.mode].noShoot) return;
+  w.cool -= dt;
+  const now = performance.now();
+  while (w.cool <= 0 && !w.reloading && g.t >= w.equipUntil) {
+    const want = d.auto ? input.held : input.press >= 0 && now - input.press < 110;
+    if (!want) break;
+    if (w.ammo <= 0) { startReload(g); break; }
+    fire(g);
+    w.cool += 1 / d.rate;
+    if (!d.auto) { input.press = -1; break; }
+  }
+  if (w.cool < 0) w.cool = 0;
+}
+
+/* ---------------- game flow ---------------- */
+function newGame(mode) {
+  return {
+    mode, t: 0, duration: S.duration, state: 'countdown', cd: 3, lastTick: 4, targets: [], points: 0, lastKill: 0,
+    cursor: S.cursorMode || !canvas.requestPointerLock, markers: [], decals: [], resumeTo: 'running', wantResume: false,
+    w: newWeapon(S.weapon, 0), weaponsUsed: new Set([WMAP[S.weapon].name]),
+    stats: { shots: 0, hits: 0, kills: 0, ttk: [], expired: 0, onTarget: 0, trackTime: 0, head: 0, body: 0, legs: 0, ringSum: 0 },
+  };
+}
+function startRun(id) {
+  ensureAudio();
+  G = newGame(id);
+  cam.yaw = 0; cam.pitch = 0; cam.kickP = 0; cam.kickY = 0; updateBasis();
+  mouse.x = W / 2; mouse.y = H / 2;
+  input.held = false; input.press = -1;
+  MODES[id].init(G);
+  $('#hMode').textContent = MODES[id].name;
+  $('#hAccK').textContent = id === 'tracking' ? 'On target' : 'Accuracy';
+  $('#aName').textContent = G.w.def.name;
+  setState('countdown');
+  if (!G.cursor) requestLock();
+}
+function setState(st) {
+  if (G) G.state = st;
+  const s = G ? st : 'menu';
+  const live = s === 'countdown' || s === 'running';
+  $('#menu').hidden = s !== 'menu';
+  $('#pause').hidden = s !== 'paused';
+  $('#results').hidden = s !== 'results';
+  $('#hud').hidden = !live;
+  $('#ammo').hidden = !live || (G && MODES[G.mode].noShoot);
+  $('#countdown').hidden = s !== 'countdown';
+  document.body.classList.toggle('playing', live);
+  document.body.classList.toggle('cursor-mode', !!(G && G.cursor));
+  if (!live) { input.held = false; input.press = -1; }
+  updateLockHint();
+}
+function updateLockHint() {
+  const show = G && !G.cursor && (G.state === 'countdown' || G.state === 'running') && document.pointerLockElement !== canvas;
+  $('#lockHint').hidden = !show;
+}
+function toMenu() {
+  if (document.pointerLockElement) document.exitPointerLock();
+  G = null;
+  cam.kickP = cam.kickY = 0;
+  setState('menu');
+  renderModes();
+  $('#start').focus();
+}
+function pause(msg) {
+  if (!G || (G.state !== 'running' && G.state !== 'countdown')) return;
+  G.resumeTo = G.state;
+  $('#pMode').textContent = MODES[G.mode].name;
+  $('#pMsg').textContent = msg || 'Your mouse was released. Resume to keep going.';
+  setState('paused');
+}
+function resume() {
+  if (!G) return;
+  ensureAudio();
+  if (G.cursor) { setState(G.resumeTo); return; }
+  G.wantResume = true;
+  requestLock();
+}
+function requestLock() {
+  const fail = () => {
+    if (!G) return;
+    const msg = 'The browser did not capture the mouse. Wait a second after pressing Esc, then click Resume. You can also switch to cursor mode in the menu.';
+    if (G.state === 'paused') $('#pMsg').textContent = msg; else pause(msg);
+  };
+  let p;
+  try { p = canvas.requestPointerLock({ unadjustedMovement: true }); }
+  catch (e) { try { p = canvas.requestPointerLock(); } catch (e2) { fail(); return; } }
+  if (p && p.catch) {
+    p.catch(() => {
+      // unadjustedMovement is not supported everywhere; retry without it
+      let p2;
+      try { p2 = canvas.requestPointerLock(); } catch (e) { fail(); return; }
+      if (p2 && p2.catch) p2.catch(fail);
+    });
+  }
+}
+document.addEventListener('pointerlockchange', () => {
+  const locked = document.pointerLockElement === canvas;
+  if (G) {
+    if (locked && G.state === 'paused' && G.wantResume) { G.wantResume = false; setState(G.resumeTo); }
+    else if (!locked && !G.cursor && (G.state === 'running' || G.state === 'countdown')) pause();
+  }
+  updateLockHint();
+});
+function finish() {
+  const g = G;
+  setState('results');
+  if (document.pointerLockElement) document.exitPointerLock();
+  const sum = summarize(g);
+  const list = history[g.mode] || (history[g.mode] = []);
+  const prevBest = list.reduce((m, r) => Math.max(m, r.s), 0);
+  list.push({ s: sum.score, a: Math.round(sum.acc * 1000) / 1000, w: g.w.def.id, d: Date.now() });
+  if (list.length > 30) list.splice(0, list.length - 30);
+  store.set('rp.v1.history', history);
+  $('#rMode').textContent = MODES[g.mode].name + ' · ' + g.duration + ' s';
+  $('#rScore').textContent = sum.score.toLocaleString();
+  const best = $('#rBest');
+  const isNew = sum.score > prevBest && list.length > 1;
+  best.textContent = isNew ? 'New best' : 'Best ' + Math.max(prevBest, sum.score).toLocaleString();
+  best.classList.toggle('new', isNew);
+  $('#rHead').textContent = sum.headline;
+  $('#rStats').innerHTML = sum.rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  drawSpark(list.map((r) => r.s));
+  $('#again').focus();
+}
+const pct = (x) => (x * 100).toFixed(1) + '%';
+function summarize(g) {
+  const s = g.stats;
+  const weapon = [...g.weaponsUsed].join(', ');
+  if (g.mode === 'tracking') {
+    const p = s.trackTime ? s.onTarget / s.trackTime : 0;
+    return {
+      score: Math.round(s.onTarget * 100), acc: p,
+      headline: p >= 0.6 ? 'Smooth tracking. Try a longer drill to test consistency.' : 'Lead the target slightly and match its speed changes.',
+      rows: [['On target', pct(p)], ['Time on target', s.onTarget.toFixed(1) + ' s'], ['Drill length', g.duration + ' s']],
+    };
+  }
+  const acc = s.shots ? s.hits / s.shots : 0;
+  if (g.mode === 'spray') {
+    const avg = s.hits ? s.ringSum / s.hits : 0;
+    return {
+      score: g.points, acc,
+      headline: avg >= 7 ? 'Tight groups. Try a faster-firing gun or a longer burst.' : 'Pull down smoothly as the first 5–10 bullets climb, then track the sideways drift.',
+      rows: [['Weapon', weapon], ['Bullets on board', pct(acc)], ['Average ring', avg ? avg.toFixed(2) : '–'], ['Shots fired', s.shots]],
+    };
+  }
+  const avg = s.ttk.length ? s.ttk.reduce((a, b) => a + b, 0) / s.ttk.length : 0;
+  const rows = [
+    ['Weapon', weapon], ['Kills', s.kills], ['Accuracy', pct(acc)], ['Shots fired', s.shots],
+    ['Kills per second', (s.kills / g.duration).toFixed(2)], ['Avg time to kill', avg ? Math.round(avg) + ' ms' : '–'],
+  ];
+  if (g.mode === 'reflex') rows.push(['Missed pop-ups', s.expired]);
+  if (g.mode === 'duel') {
+    rows.push(['Headshot rate', pct(s.hits ? s.head / s.hits : 0)], ['Head / body / legs', `${s.head} / ${s.body} / ${s.legs}`]);
+  }
+  let headline = 'Score is points × (0.5 + 0.5 × accuracy).';
+  if (acc < 0.75 && s.shots > 10) headline = 'Accuracy under 75% costs you score. Tap or burst instead of holding fire.';
+  else if (g.mode === 'duel' && s.hits && s.head / s.hits < 0.3) headline = 'Keep your crosshair at head height so you only adjust sideways.';
+  return { score: Math.round(g.points * (0.5 + 0.5 * acc)), acc, headline, rows };
+}
+
+/* ---------------- input ---------------- */
+function press() {
+  if (!G || G.state !== 'running') return;
+  input.held = true;
+  input.press = performance.now();
+}
+canvas.addEventListener('mousedown', (e) => {
+  if (!G) return;
+  if (G.cursor) { mouse.x = e.clientX; mouse.y = e.clientY; }
+  else if (document.pointerLockElement !== canvas && (G.state === 'running' || G.state === 'countdown')) { requestLock(); return; }
+  if (e.button === 0) press();
+  else if (e.button === 2) toggleZoom();
+});
+document.addEventListener('mouseup', (e) => { if (e.button === 0) input.held = false; });
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' || !G || !G.cursor) return;
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  press();
+});
+document.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') input.held = false; });
+document.addEventListener('mousemove', (e) => {
+  if (!G) return;
+  if (G.cursor) { mouse.x = e.clientX; mouse.y = e.clientY; return; }
+  if (document.pointerLockElement !== canvas) return;
+  const dx = e.movementX, dy = e.movementY;
+  if (Math.abs(dx) > 1500 || Math.abs(dy) > 1500) return; // drop the occasional spike some browsers send on lock
+  const w = G.w;
+  const k = S.sens * YAW_PER_COUNT * DEG * (w.zoomed ? S.zoomSens / w.def.zoom : 1);
+  cam.yaw += dx * k;
+  cam.pitch = Math.max(-89 * DEG, Math.min(89 * DEG, cam.pitch - dy * k));
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (G && G.cursor && e.pointerType !== 'mouse') { mouse.x = e.clientX; mouse.y = e.clientY; }
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches && e.target.matches('input, select')) return;
+  if (!G) return;
+  const k = e.key.toLowerCase();
+  const live = G.state === 'running' || G.state === 'countdown';
+  if (k === 'escape' && G.cursor && live) pause('Paused. Resume when you are ready.');
+  else if (k === 'r' && live) startReload(G);
+  else if (k === 'backspace' && G.state !== 'menu') { e.preventDefault(); startRun(G.mode); }
+  else if (/^Digit[0-9]$/.test(e.code) && live) {
+    const i = (+e.code.slice(5) + 9) % 10;
+    if (WEAPONS[i]) switchWeapon(WEAPONS[i].id);
+  }
+  else if ((k === ' ' || k === 'enter') && G.state === 'results' && document.activeElement === document.body) { e.preventDefault(); startRun(G.mode); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+
+/* ---------------- rendering ---------------- */
+function drawSphere(tg) {
+  const c = toCam(tg.p);
+  if (c[2] < NEAR + tg.r) return;
+  const [sx, sy] = proj(c), rr = tg.r * FL / c[2];
+  const g = ctx.createRadialGradient(sx - rr * 0.35, sy - rr * 0.4, rr * 0.08, sx, sy, rr);
+  g.addColorStop(0, TP.hi); g.addColorStop(0.5, tg.lit ? TP.lit : TP.base); g.addColorStop(1, TP.lo);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, Math.PI * 2); ctx.fill();
+  if (tg.lit) { ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ctx.stroke(); }
+  if (tg.ttl) {
+    const left = Math.max(0, 1 - (G.t - tg.born) / tg.ttl);
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sx, sy, rr + 5, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2); ctx.stroke();
+  }
+}
+function drawBoard(tg) {
+  const c = toCam(tg.p);
+  if (c[2] < NEAR + 0.5) return;
+  const [sx, sy] = proj(c), rr = tg.r * FL / c[2];
+  // stand
+  const foot = toCam([tg.p[0], ROOM.y0, tg.p[2]]);
+  if (foot[2] > NEAR) {
+    const f = proj(foot);
+    ctx.strokeStyle = '#2b3a42'; ctx.lineWidth = Math.max(2, 0.06 * FL / c[2]);
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(f[0], f[1]); ctx.stroke();
+  }
+  for (let i = 10; i >= 1; i--) {
+    ctx.fillStyle = i <= 3 ? (i % 2 ? TP.base : TP.lit) : i % 2 ? '#dfe6e4' : '#c3cdcb';
+    ctx.beginPath(); ctx.arc(sx, sy, rr * i / 10, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(13,20,24,.35)'; ctx.lineWidth = 1;
+  for (let i = 1; i <= 10; i++) { ctx.beginPath(); ctx.arc(sx, sy, rr * i / 10, 0, Math.PI * 2); ctx.stroke(); }
+}
+function capsuleSeg(a, b) {
+  const s = clipSeg(toCam(a), toCam(b));
+  if (!s) return null;
+  return { p: proj(s[0]), q: proj(s[1]), z: (s[0][2] + s[1][2]) / 2 };
+}
+function drawBot(b) {
+  const parts = botParts(b);
+  const hurt = G.t - b.flash < 0.08;
+  const sc = toCam([b.x, ROOM.y0, b.z]);
+  if (sc[2] > NEAR) {
+    const p = proj(sc), rx = 0.4 * FL / sc[2];
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.ellipse(p[0], p[1], rx, rx * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  const segs = parts.map((pt) => {
+    if (pt.kind === 'c') return Object.assign(capsuleSeg(pt.a, pt.b) || {}, { pt });
+    const c = toCam(pt.p);
+    return c[2] > NEAR ? { p: proj(c), z: c[2], pt } : { pt };
+  }).filter((s) => s.p);
+  ctx.lineCap = 'round';
+  for (const pass of [0, 1]) {
+    for (const s of segs) {
+      const w = 2 * s.pt.r * FL / s.z;
+      const col = pass === 0 ? S.targetColor : hurt ? '#ffffff' : s.pt.part === 'head' ? '#e2e8ea' : '#b9c3c7';
+      const extra = pass === 0 ? 4 : 0;
+      if (s.pt.kind === 'c') {
+        ctx.strokeStyle = col; ctx.lineWidth = w + extra;
+        ctx.beginPath(); ctx.moveTo(s.p[0], s.p[1]); ctx.lineTo(s.q[0], s.q[1]); ctx.stroke();
+      } else {
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(s.p[0], s.p[1], w / 2 + extra / 2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+  // health bar
+  const head = segs.find((s) => s.pt.part === 'head');
+  if (head && b.hp < 150) {
+    const bw = Math.max(24, 0.5 * FL / head.z), y = head.p[1] - 0.3 * FL / head.z;
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(head.p[0] - bw / 2, y, bw, 4);
+    ctx.fillStyle = S.targetColor; ctx.fillRect(head.p[0] - bw / 2, y, bw * Math.max(0, b.hp) / 150, 4);
+  }
+}
+function drawDecals(board, now) {
+  for (const d of G.decals) {
+    if (!!d.board !== board) continue;
+    const age = now - d.t, life = board ? 6000 : 5000;
+    if (age > life) continue;
+    const c = toCam(d.p);
+    if (c[2] < NEAR) continue;
+    const a = Math.min(1, (life - age) / 1000);
+    const [sx, sy] = proj(c), r = Math.max(1.5, 0.028 * FL / c[2]);
+    ctx.fillStyle = `rgba(8,12,14,${0.9 * a})`;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,220,160,${(age < 120 ? 0.9 : 0.18) * a})`; ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  G.decals = G.decals.filter((d) => now - d.t < 6000);
+}
+
+/* Weapon silhouettes: drawn in local space with the stock at x = 0 and the muzzle toward -x.
+   Returns the x position of the muzzle. */
+function drawGun(c, w) {
+  const L = w.look, body = '#232b30', mid = '#323e45', edge = 'rgba(255,255,255,.10)';
+  const rh = L.recvH || 30;
+  c.lineJoin = 'round';
+  const poly = (pts, fill) => {
+    c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath();
+    c.fillStyle = fill; c.fill(); c.strokeStyle = edge; c.lineWidth = 1.5; c.stroke();
+  };
+  const rect = (x0, y0, len, h, fill) => poly([[x0, y0], [x0 - len, y0], [x0 - len, y0 + h], [x0, y0 + h]], fill);
+  let x = 0;
+  if (L.stock) {
+    if (L.stockThin) { poly([[0, -rh / 2 + 2], [-L.stock, -rh / 2 + 4], [-L.stock, -rh / 2 + 12], [-8, rh / 2 + 16], [0, rh / 2 + 16]], body); }
+    else poly([[0, -rh / 2 + 2], [-L.stock, -rh / 2 + 2], [-L.stock, rh / 2 - 4], [0, rh / 2 + 22]], body);
+    x = -L.stock;
+  }
+  const gx = x - (L.grip || 20), gh = L.gripH || 52;
+  poly([[gx, rh / 2 - 2], [gx - 22, rh / 2 - 2], [gx - 12, rh / 2 + gh], [gx + 10, rh / 2 + gh]], body);
+  if (L.mag) {
+    const mx = x - L.mag.at, m = L.mag;
+    poly([[mx, rh / 2 - 2], [mx - m.w, rh / 2 - 2], [mx - m.w - m.curve, rh / 2 + m.h], [mx - m.curve, rh / 2 + m.h]], mid);
+  }
+  if (L.pistol) {
+    rect(x, -rh / 2, L.recv, rh * 0.58, mid);       // slide
+    rect(x - 6, rh * 0.08, L.recv - 12, rh * 0.42, body); // frame
+    rect(x - 10, -rh / 2 + 4, L.recv * 0.45, 3, w.accent);
+  } else {
+    rect(x, -rh / 2, L.recv, rh, mid);
+    rect(x - 12, -rh / 2 + 6, L.recv * 0.5, 4, w.accent);
+  }
+  if (L.cyl) { c.beginPath(); c.arc(x - L.recv * 0.55, rh * 0.05, rh * 0.62, 0, Math.PI * 2); c.fillStyle = body; c.fill(); c.strokeStyle = edge; c.stroke(); }
+  x -= L.recv;
+  if (L.guard) { const gh2 = L.guardH || 24; rect(x, -gh2 / 2 - 2, L.guard, gh2, body); x -= L.guard; }
+  if (L.barrel) { const bh = L.barrelH || 8; rect(x, -bh / 2 - (L.pistol ? rh * 0.2 : 2), L.barrel, bh, body); x -= L.barrel; }
+  if (L.supp) { const sh = L.suppH || 18; rect(x, -sh / 2 - (L.pistol ? rh * 0.2 : 2), L.supp, sh, mid); x -= L.supp; }
+  if (L.scope) {
+    const s = L.scope, sx = -(L.stock || 0) - s.at;
+    rect(sx - s.len * 0.3, -rh / 2 - 6, 10, 6, body);
+    rect(sx - s.len * 0.7, -rh / 2 - 6, 10, 6, body);
+    rect(sx, -rh / 2 - 6 - s.h, s.len, s.h, body);
+    c.beginPath(); c.ellipse(sx - s.len, -rh / 2 - 6 - s.h / 2, s.h * 0.2, s.h * 0.5, 0, 0, Math.PI * 2);
+    c.fillStyle = '#12303a'; c.fill();
+  }
+  return x;
+}
+function drawViewmodel(now, wstate, def) {
+  const s = Math.max(0.55, Math.min(1.35, Math.min(W / 1280, H / 760)));
+  const L = def.look;
+  let ox = W - (L.pistol ? 240 : 40) * s, oy = H + (L.pistol ? -95 : 30) * s;
+  let ang = L.pistol ? 0.2 : 0.3; // positive tilts the muzzle up toward the crosshair
+  // idle breathing, equip slide, reload dip and recoil kick
+  ox += Math.sin(now / 900) * 2 * s; oy += Math.sin(now / 700) * 2 * s;
+  const eq = Math.min(1, (now - wstate.equipAt) / 300);
+  oy += (1 - eq) * 220 * s;
+  if (wstate.reloading && G) {
+    const p = 1 - Math.max(0, (wstate.reloadEnd - G.t) / def.reload);
+    const dip = Math.sin(Math.PI * Math.min(1, p));
+    oy += dip * 150 * s; ang -= dip * 0.35;
+  }
+  const k = wstate.kick * Math.min(1.6, 0.5 + def.kick);
+  ox += k * 16 * s; ang += k * 0.08;
+  ctx.save();
+  ctx.translate(ox, oy); ctx.rotate(ang); ctx.scale(s * 1.15, s * 1.15);
+  const mx = drawGun(ctx, def);
+  if (now - wstate.flash < 45) {
+    const silenced = !!L.supp, r = silenced ? 14 : 34 + def.kick * 6;
+    const my = L.pistol ? -(L.recvH || 30) * 0.2 : -2;
+    const g = ctx.createRadialGradient(mx - r * 0.3, my, 0, mx - r * 0.3, my, r);
+    g.addColorStop(0, 'rgba(255,250,220,1)'); g.addColorStop(0.35, 'rgba(255,200,90,.85)'); g.addColorStop(1, 'rgba(255,140,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(mx - r * 0.3, my, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawScope(a) {
+  const R = Math.min(W, H) * 0.46, cx = W / 2, cy = H / 2;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = '#030506';
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(cx, cy, R, 0, Math.PI * 2, true); ctx.fill('evenodd');
+  const g = ctx.createRadialGradient(cx, cy, R * 0.8, cx, cy, R);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.7)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#030506';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - R, cy); ctx.lineTo(cx - 5, cy); ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + R, cy);
+  ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy - 5); ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + R);
+  ctx.stroke();
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(cx - R, cy); ctx.lineTo(cx - R * 0.45, cy); ctx.moveTo(cx + R * 0.45, cy); ctx.lineTo(cx + R, cy);
+  ctx.moveTo(cx, cy + R * 0.45); ctx.lineTo(cx, cy + R);
+  ctx.stroke();
+  ctx.fillStyle = S.xh.color;
+  ctx.beginPath(); ctx.arc(cx, cy, 1.6, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawCrosshair(c, x, y, xh, scale) {
+  c.save();
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  const k = Math.max(1, Math.round(scale));
+  x = Math.round(x * scale); y = Math.round(y * scale);
+  const rects = [];
+  if (xh.inner) {
+    const L = xh.innerLen * k, T = xh.innerThick * k, Gp = xh.innerGap * k, h = Math.floor(T / 2);
+    rects.push([x + Gp, y - h, L, T], [x - Gp - L, y - h, L, T], [x - h, y - Gp - L, T, L], [x - h, y + Gp, T, L]);
+  }
+  if (xh.dot) { const D = xh.dotSize * k, h = Math.floor(D / 2); rects.push([x - h, y - h, D, D]); }
+  if (xh.outline) {
+    c.fillStyle = `rgba(0,0,0,${xh.outlineAlpha})`;
+    c.beginPath(); rects.forEach((r) => c.rect(r[0] - k, r[1] - k, r[2] + 2 * k, r[3] + 2 * k)); c.fill();
+  }
+  c.fillStyle = xh.color;
+  rects.forEach((r) => c.fillRect(r[0], r[1], r[2], r[3]));
+  c.restore();
+}
+function drawMarkers(now, cx, cy) {
+  G.markers = G.markers.filter((m) => now - m.t < 180);
+  for (const m of G.markers) {
+    const a = 1 - (now - m.t) / 180;
+    ctx.strokeStyle = m.head ? `rgba(255,210,74,${a})` : `rgba(255,255,255,${a})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { ctx.moveTo(cx + sx * 7, cy + sy * 7); ctx.lineTo(cx + sx * 13, cy + sy * 13); }
+    ctx.stroke();
+  }
+}
+const demo = [{ type: 'sphere', p: [-1.3, 0.6, 12], r: 0.42 }, { type: 'sphere', p: [1.25, -0.4, 12], r: 0.42 }, { type: 'sphere', p: [0.1, 1.7, 12], r: 0.42 }];
+const menuWeapon = { ammo: 0, reloading: false, equipAt: -1e9, flash: -1, kick: 0 };
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function render(now) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (!G) {
+    cam.yaw = reduceMotion ? 0.12 : Math.sin(now / 9000) * 0.28;
+    cam.pitch = reduceMotion ? 0.02 : 0.03 + Math.sin(now / 13000) * 0.05;
+  }
+  const w = G ? G.w : null;
+  FL = FL0 * (w ? w.zoomCur : 1);
+  updateBasis();
+  renderRoom();
+  if (G) drawDecals(false, now);
+  const list = (G ? G.targets : demo).slice().sort((a, b) => toCam(b.p || [b.x, 0, b.z])[2] - toCam(a.p || [a.x, 0, a.z])[2]);
+  for (const tg of list) tg.type === 'sphere' ? drawSphere(tg) : tg.type === 'board' ? drawBoard(tg) : drawBot(tg);
+  if (G) drawDecals(true, now);
+  vignette(w && w.zoomed && !w.def.scope ? 0.65 : 0.45);
+  const def = w ? w.def : WMAP[S.weapon];
+  const scopeA = w && def.scope ? Math.max(0, Math.min(1, (w.zoomCur - 1) / (def.zoom - 1) * 1.4 - 0.2)) : 0;
+  if (scopeA < 0.6 && !(G && MODES[G.mode].noShoot)) drawViewmodel(now, w || menuWeapon, def);
+  if (G && (G.state === 'running' || G.state === 'countdown')) {
+    const cx = G.cursor ? mouse.x : W / 2, cy = G.cursor ? mouse.y : H / 2;
+    if (scopeA > 0) drawScope(scopeA);
+    drawMarkers(now, cx, cy);
+    if (scopeA < 0.5) drawCrosshair(ctx, cx, cy, S.xh, DPR);
+  }
+}
+
+/* ---------------- loop ---------------- */
+let last = performance.now();
+let hudCache = '';
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (G) {
+    if (G.state === 'countdown') {
+      G.cd -= dt;
+      const n = Math.ceil(G.cd);
+      if (n !== G.lastTick && n > 0) { G.lastTick = n; $('#countdown').textContent = n; sfx('tick'); }
+      if (G.cd <= 0) { setState('running'); sfx('go'); }
+    } else if (G.state === 'running') {
+      G.t += dt;
+      MODES[G.mode].update(G, dt);
+    }
+    weaponTick(G, dt);
+    if (G.state === 'running' && G.t >= G.duration) finish();
+    if (G && (G.state === 'running' || G.state === 'countdown')) {
+      const left = Math.max(0, G.duration - G.t);
+      const s = G.stats, w = G.w;
+      const acc = G.mode === 'tracking' ? (s.trackTime ? pct(s.onTarget / s.trackTime) : '–') : (s.shots ? pct(s.hits / s.shots) : '–');
+      const rp = w.reloading ? Math.min(1, 1 - (w.reloadEnd - G.t) / w.def.reload) : 1;
+      const key = [G.points, left.toFixed(1), acc, w.ammo, w.def.id, rp.toFixed(2)].join('|');
+      if (key !== hudCache) {
+        hudCache = key;
+        $('#hScore').textContent = G.points.toLocaleString();
+        $('#hTime').textContent = left.toFixed(1);
+        $('#hTime').classList.toggle('low', left <= 5);
+        $('#hAcc').textContent = acc;
+        $('#aMag').textContent = w.reloading ? '··' : w.ammo;
+        $('#aMag').classList.toggle('empty', !w.reloading && w.ammo <= Math.ceil(w.def.mag * 0.2));
+        $('#aMax').textContent = '/ ' + w.def.mag;
+        $('#aBar').style.width = (rp * 100).toFixed(0) + '%';
+      }
+    }
+  }
+  render(now);
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- menu UI ---------------- */
+function bestOf(id) { return (history[id] || []).reduce((m, r) => Math.max(m, r.s), 0); }
+function renderModes() {
+  const box = $('#modes');
+  box.innerHTML = '';
+  for (const [id, m] of Object.entries(MODES)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mode'; b.setAttribute('role', 'radio'); b.id = 'mode-' + id;
+    b.setAttribute('aria-checked', String(S.mode === id));
+    const best = bestOf(id);
+    b.innerHTML = `<span class="name">${m.name}</span><span class="tag">${m.tag}</span><span class="desc">${m.desc}</span><span class="best">${best ? best.toLocaleString() : '<em>no runs</em>'}</span>`;
+    b.addEventListener('click', () => { S.mode = id; saveSettings(); renderModes(); });
+    b.addEventListener('dblclick', () => startRun(id));
+    box.appendChild(b);
+  }
+  $('#start').textContent = 'Start ' + MODES[S.mode].name;
+}
+function renderWeapons() {
+  const box = $('#weapons');
+  box.innerHTML = '';
+  WEAPONS.forEach((w, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'weapon'; b.id = 'weapon-' + w.id; b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(S.weapon === w.id));
+    b.innerHTML = `<span>${w.name}</span><kbd>${(i + 1) % 10}</kbd>`;
+    b.addEventListener('click', () => switchWeapon(w.id));
+    box.appendChild(b);
+  });
+  const w = WMAP[S.weapon];
+  $('#wName').textContent = w.name;
+  $('#wClass').textContent = `${w.cls} · ${w.auto ? 'full auto' : 'semi auto'}${w.scope ? ' · scoped' : ''}`;
+  const d = w.dmg[0];
+  const rows = [
+    ['Fire rate', w.rate + ' /s'], ['Magazine', w.mag], ['Reload', w.reload + ' s'],
+    ['Head / body / legs', `${d[1]} / ${d[2]} / ${d[3]}`], ['Zoom', w.zoom > 1 ? w.zoom + '×' : '–'], ['Cost', w.cost ? w.cost.toLocaleString() + ' ¤' : 'Free'],
+  ];
+  $('#wStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  drawGunPreview();
+}
+function drawGunPreview() {
+  const cv = $('#gunPreview'), c = cv.getContext('2d');
+  const r = Math.min(2, window.devicePixelRatio || 1), cw = cv.clientWidth || 360, ch = 110;
+  cv.width = cw * r; cv.height = ch * r;
+  const w = WMAP[S.weapon], L = w.look;
+  const len = (L.stock || 0) + L.recv + (L.guard || 0) + (L.barrel || 0) + (L.supp || 0) + 20;
+  const sc = Math.min((cw - 32) / len, 1.1, (ch - 24) / 120);
+  c.setTransform(r, 0, 0, r, 0, 0);
+  c.translate(cw / 2 + len * sc / 2 - 10 * sc, ch / 2 - 12 * sc + (L.pistol ? -10 : 0));
+  c.scale(sc, sc);
+  drawGun(c, w);
+}
+function updateDerived() {
+  const cm = 2.54 * 360 / (S.dpi * S.sens * YAW_PER_COUNT);
+  $('#derived').innerHTML = `<span>eDPI <b>${Math.round(S.dpi * S.sens)}</b></span><span><b>${cm.toFixed(1)}</b> cm/360°</span><span><b>${(S.sens * YAW_PER_COUNT).toFixed(4)}</b>° per count</span>`;
+}
+function syncSeg() {
+  document.querySelectorAll('#durSeg button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.dur === S.duration)));
+  document.querySelectorAll('#inputSeg button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.input === 'cursor') === S.cursorMode)));
+  $('#inputHint').textContent = S.cursorMode
+    ? 'The camera stays still and you aim with the pointer. Works with touch and trackpads, but does not match in-game sensitivity, and scopes are turned off.'
+    : 'Captures the mouse and turns the camera by raw counts, so it matches Valorant. Set Windows pointer speed to 6/11 with acceleration off for the closest match.';
+}
+function swatches(el, colors, get, set) {
+  el.innerHTML = '';
+  for (const [c, name] of colors) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'swatch'; b.style.background = c; b.title = name; b.setAttribute('aria-label', name);
+    b.setAttribute('aria-pressed', String(get() === c));
+    b.addEventListener('click', () => { set(c); saveSettings(); swatches(el, colors, get, set); });
+    el.appendChild(b);
+  }
+}
+function drawPreview() {
+  const cv = $('#xhPreview'), c = cv.getContext('2d');
+  const r = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = 132 * r; cv.height = 132 * r;
+  c.fillStyle = '#172731'; c.fillRect(0, 0, cv.width, cv.height);
+  c.strokeStyle = 'rgba(120,205,190,.12)'; c.lineWidth = 1;
+  for (let i = 0; i <= 132 * r; i += 22 * r) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, cv.height); c.moveTo(0, i); c.lineTo(cv.width, i); c.stroke(); }
+  drawCrosshair(c, 66, 66, S.xh, r);
+}
+function drawSpark(vals) {
+  const cv = $('#rSpark'), c = cv.getContext('2d');
+  const r = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth || 500, h = 90;
+  cv.width = w * r; cv.height = h * r;
+  c.setTransform(r, 0, 0, r, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const pad = { l: 4, r: 56, t: 10, b: 10 };
+  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const x = (i) => pad.l + (vals.length < 2 ? (w - pad.l - pad.r) : i * (w - pad.l - pad.r) / (vals.length - 1));
+  const y = (v) => pad.t + (1 - (v - min) / (max - min || 1)) * (h - pad.t - pad.b);
+  c.strokeStyle = 'rgba(138,155,160,.25)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(pad.l, y(max)); c.lineTo(w - pad.r, y(max)); c.moveTo(pad.l, y(min)); c.lineTo(w - pad.r, y(min)); c.stroke();
+  c.fillStyle = '#8a9ba0'; c.font = '500 11px "JetBrains Mono", monospace'; c.textBaseline = 'middle'; c.textAlign = 'left';
+  c.fillText(max.toLocaleString(), w - pad.r + 8, y(max));
+  c.fillText(min.toLocaleString(), w - pad.r + 8, y(min));
+  if (vals.length > 1) {
+    c.beginPath(); vals.forEach((v, i) => (i ? c.lineTo(x(i), y(v)) : c.moveTo(x(i), y(v))));
+    c.lineTo(x(vals.length - 1), h - pad.b); c.lineTo(x(0), h - pad.b); c.closePath();
+    c.fillStyle = 'rgba(77,227,193,.12)'; c.fill();
+    c.beginPath(); vals.forEach((v, i) => (i ? c.lineTo(x(i), y(v)) : c.moveTo(x(i), y(v))));
+    c.strokeStyle = '#4de3c1'; c.lineWidth = 2; c.stroke();
+  }
+  const lx = x(vals.length - 1), ly = y(vals[vals.length - 1]);
+  c.fillStyle = '#4de3c1'; c.beginPath(); c.arc(lx, ly, 4, 0, Math.PI * 2); c.fill();
+}
+
+function bindMenu() {
+  const sens = $('#sens'), dpi = $('#dpi'), zs = $('#zoomSens');
+  sens.value = S.sens; dpi.value = S.dpi; zs.value = S.zoomSens;
+  sens.addEventListener('input', () => { const v = parseFloat(sens.value); if (v > 0 && v <= 10) { S.sens = v; saveSettings(); updateDerived(); } });
+  dpi.addEventListener('input', () => { const v = parseFloat(dpi.value); if (v >= 50 && v <= 32000) { S.dpi = v; saveSettings(); updateDerived(); } });
+  zs.addEventListener('input', () => { const v = parseFloat(zs.value); if (v >= 0.1 && v <= 3) { S.zoomSens = v; saveSettings(); } });
+  $('#convApply').addEventListener('click', () => {
+    const v = parseFloat($('#convVal').value);
+    if (!(v > 0)) { toast('Enter the sensitivity from the other game first.'); return; }
+    S.sens = Math.round(v / parseFloat($('#convGame').value) * 1000) / 1000;
+    sens.value = S.sens; saveSettings(); updateDerived();
+    toast('Valorant sens set to ' + S.sens + '.');
+  });
+  document.querySelectorAll('#durSeg button').forEach((b) => b.addEventListener('click', () => { S.duration = +b.dataset.dur; saveSettings(); syncSeg(); }));
+  document.querySelectorAll('#inputSeg button').forEach((b) => b.addEventListener('click', () => { S.cursorMode = b.dataset.input === 'cursor'; saveSettings(); syncSeg(); }));
+  const vol = $('#vol');
+  vol.value = S.volume;
+  vol.addEventListener('input', () => { S.volume = parseFloat(vol.value); saveSettings(); });
+  vol.addEventListener('change', () => { ensureAudio(); gunSound(WMAP[S.weapon].sound); });
+  swatches($('#tcol'), [['#ff4d57', 'Red'], ['#f2e14c', 'Yellow'], ['#c070ff', 'Purple']], () => S.targetColor, (c) => { S.targetColor = c; targetPalette(); });
+  swatches($('#xhCol'), [['#ffffff', 'White'], ['#00ff00', 'Green'], ['#ffff00', 'Yellow'], ['#00ffff', 'Cyan'], ['#ff00ff', 'Pink'], ['#ff0000', 'Red']],
+    () => S.xh.color, (c) => { S.xh.color = c; drawPreview(); });
+  for (const [id, key] of [['xhInner', 'inner'], ['xhDot', 'dot'], ['xhOutline', 'outline']]) {
+    const el = $('#' + id); el.checked = S.xh[key];
+    el.addEventListener('change', () => { S.xh[key] = el.checked; saveSettings(); drawPreview(); });
+  }
+  for (const [id, key] of [['xhLen', 'innerLen'], ['xhThick', 'innerThick'], ['xhGap', 'innerGap']]) {
+    const el = $('#' + id), out = $('#' + id + 'O');
+    el.value = S.xh[key]; out.textContent = S.xh[key];
+    el.addEventListener('input', () => { S.xh[key] = +el.value; out.textContent = el.value; saveSettings(); drawPreview(); });
+  }
+  $('#start').addEventListener('click', () => startRun(S.mode));
+  $('#resume').addEventListener('click', resume);
+  $('#pRestart').addEventListener('click', () => startRun(G.mode));
+  $('#pQuit').addEventListener('click', toMenu);
+  $('#again').addEventListener('click', () => startRun(G.mode));
+  $('#toMenu').addEventListener('click', toMenu);
+  window.addEventListener('resize', drawGunPreview);
+}
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+}
+
+bindMenu();
+renderModes();
+renderWeapons();
+updateDerived();
+syncSeg();
+drawPreview();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawPreview);
+setState('menu');
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
