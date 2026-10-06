@@ -10,6 +10,7 @@ narrated with ElevenLabs. Every frame is a pure function of time, so rendering i
 - `audio/` – ElevenLabs narration (`sNN.mp3`) + background music
 - `scripts/milk.json` – narration script
 - `render.mjs` – `node render.mjs milk.js out/milk.mp4 [--workers 4]` (frames → x264, then narration + ducked music mix)
+- `mix.mjs` – `node mix.mjs out/milk_video.mp4 out/milk.mp4` (narration + ducked music onto a `--noaudio` render)
 - `stills.mjs` – `node stills.mjs milk.js out/stills "10,60,120"` quick PNG previews
 - `player.html?v=milk.js` – live preview in a browser
 
