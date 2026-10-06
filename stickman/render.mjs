@@ -11,9 +11,11 @@ const fps = +fpsArg, here = dirname(fileURLToPath(import.meta.url));
 mkdirSync(dirname(resolve(out)), { recursive: true });
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 await page.goto(`file://${here}/player.html?render=1&v=${encodeURIComponent(src)}`);
 await page.waitForFunction('window.READY');
+const [pw, ph] = await page.evaluate('window.PX');
+await page.setViewportSize({ width: pw, height: ph });
 const total = await page.evaluate('window.TOTAL');
 const frames = Math.round(total * fps);
 

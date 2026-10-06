@@ -1,7 +1,7 @@
 // Stick-man animation engine. Pure canvas, deterministic: draw(t) renders the video at time t (seconds).
 // Logical canvas is 540x960 (9:16). The renderer scales it up to 1080x1920.
 (function () {
-  const W = 540, H = 960, GROUND = 700;
+  let W = 540, H = 960, GROUND = 700;
   const rad = (d) => (d * Math.PI) / 180;
 
   // ---- easing -------------------------------------------------------------
@@ -67,8 +67,10 @@
     ctx.translate(f.x, f.y);
     if (f.rot) ctx.rotate(rad(f.rot));
     ctx.scale(sc * d, sc);
-    ctx.strokeStyle = f.color || '#111'; ctx.fillStyle = f.color || '#111';
-    ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const soft = f.style === 'soft';
+    ctx.strokeStyle = f.color || (soft ? '#e9e2cf' : '#111'); ctx.fillStyle = ctx.strokeStyle;
+    ctx.lineWidth = soft ? 15 : 7; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (f.glow) { ctx.shadowColor = f.glow; ctx.shadowBlur = 22; }
 
     const legLen = 52, hipY = -(legLen * 2 - (P.drop || 0)) - (P.bob || 0) + (P.lift || 0) * -1;
     const hx = 0, hy = hipY;
@@ -84,10 +86,12 @@
     // head
     const hr = 26, ha = rad((P.head || 0) + (P.torso || 0));
     const cx = sx + Math.sin(ha) * (hr + 6), cy = sy - Math.cos(ha) * (hr + 6);
-    ctx.fillStyle = f.fill || '#fff';
+    ctx.fillStyle = f.fill || (soft ? (f.color || '#e9e2cf') : '#fff');
     ctx.beginPath(); ctx.arc(cx, cy, hr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = f.color || '#111';
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = soft ? (f.eyes || '#2a2a2a') : (f.color || '#111'); ctx.strokeStyle = ctx.fillStyle;
     drawFace(ctx, cx, cy, hr, f.face || 'happy', f.talk || 0, f.t || 0);
+    if (f.band) { ctx.fillStyle = '#e53935'; ctx.fillRect(cx - hr + 1, cy - 12, hr * 2 - 2, 7); ctx.beginPath(); ctx.moveTo(cx - hr, cy - 9); ctx.lineTo(cx - hr - 16, cy - 2 + Math.sin(f.t * 6) * 3); ctx.lineTo(cx - hr - 14, cy - 14); ctx.fill(); }
 
     if (f.hat === 'cap') { ctx.fillStyle = '#e53935'; ctx.beginPath(); ctx.arc(cx, cy - 4, hr + 2, Math.PI, 0); ctx.fill(); ctx.fillRect(cx, cy - 6, hr + 14, 6); }
     if (f.hat === 'top') { ctx.fillStyle = '#222'; ctx.fillRect(cx - hr - 6, cy - hr - 2, hr * 2 + 12, 6); ctx.fillRect(cx - hr + 6, cy - hr - 34, hr * 2 - 12, 34); }
@@ -100,7 +104,10 @@
     ctx.save(); ctx.lineWidth = 4;
     const blink = (t % 3.2) > 3.1;
     const eye = (ex, ey) => {
-      if (face === 'dead') { ctx.beginPath(); ctx.moveTo(ex - 4, ey - 4); ctx.lineTo(ex + 4, ey + 4); ctx.moveTo(ex + 4, ey - 4); ctx.lineTo(ex - 4, ey + 4); ctx.stroke(); }
+      if (face === 'tired') { ctx.beginPath(); ctx.moveTo(ex - 5, ey); ctx.lineTo(ex + 5, ey); ctx.stroke(); ctx.beginPath(); ctx.arc(ex, ey + 2, 2, 0, 7); ctx.fill(); }
+      else if (face === 'angry' || face === 'determined') { ctx.beginPath(); ctx.moveTo(ex - 5, ey - 5); ctx.lineTo(ex + 5, ey - 1); ctx.stroke(); ctx.beginPath(); ctx.arc(ex, ey + 2, 2.4, 0, 7); ctx.fill(); }
+      else if (face === 'evil') { ctx.save(); ctx.strokeStyle = ctx.fillStyle = '#ff3b30'; ctx.shadowColor = '#f00'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.moveTo(ex - 6, ey - 4); ctx.lineTo(ex + 6, ey); ctx.stroke(); ctx.restore(); }
+      else if (face === 'dead') { ctx.beginPath(); ctx.moveTo(ex - 4, ey - 4); ctx.lineTo(ex + 4, ey + 4); ctx.moveTo(ex + 4, ey - 4); ctx.lineTo(ex - 4, ey + 4); ctx.stroke(); }
       else if (face === 'sleep' || blink) { ctx.beginPath(); ctx.moveTo(ex - 4, ey); ctx.lineTo(ex + 4, ey); ctx.stroke(); }
       else if (face === 'shock') { ctx.beginPath(); ctx.arc(ex, ey, 6, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(ex, ey, 1.8, 0, 7); ctx.fill(); }
       else { ctx.beginPath(); ctx.arc(ex, ey, 3.6, 0, 7); ctx.fill(); }
@@ -110,6 +117,8 @@
     ctx.beginPath();
     if (talk) { ctx.ellipse(mx, my, 5, open / 1.5 + 1, 0, 0, 7); ctx.fill(); }
     else if (face === 'happy' || face === 'cheer') { ctx.arc(mx, my - 3, 7, 0.1, Math.PI - 0.1); ctx.stroke(); }
+    else if (face === 'tired' || face === 'evil') { ctx.moveTo(mx - 5, my + 3); ctx.quadraticCurveTo(mx, my - 1, mx + 5, my + 3); ctx.stroke(); }
+    else if (face === 'determined' || face === 'angry') { ctx.moveTo(mx - 6, my + 2); ctx.lineTo(mx + 6, my + 2); ctx.stroke(); }
     else if (face === 'sad' || face === 'scared') { ctx.arc(mx, my + 7, 6, Math.PI + 0.3, -0.3); ctx.stroke(); }
     else if (face === 'shock') { ctx.ellipse(mx, my + 2, 5, 7, 0, 0, 7); ctx.stroke(); }
     else if (face === 'smirk') { ctx.moveTo(mx - 6, my); ctx.quadraticCurveTo(mx + 2, my + 6, mx + 9, my - 3); ctx.stroke(); }
@@ -178,7 +187,7 @@
       x, y: y - lift, dir: lastBefore(kfs, t, 'dir', def.dir || 1), pose, t,
       face: lastBefore(kfs, t, 'face', def.face || 'happy'),
       rot: sample(kfs, t, 'rot', 0), scale: sample(kfs, t, 'scale', def.scale || 1),
-      color: def.color, fill: def.fill, hat: def.hat, talk, prop: def.prop,
+      color: def.color, fill: def.fill, hat: def.hat, talk, prop: def.prop, style: def.style, glow: def.glow, band: def.band, eyes: def.eyes, scaleDefault: def.scale,
     };
   }
 
@@ -221,12 +230,14 @@
         ctx.fillStyle = o.color || '#222'; ctx.font = `bold ${o.size || 40}px Arial`; ctx.textAlign = 'center';
         o.text.split('\n').forEach((l, i) => ctx.fillText(l, 0, i * (o.size || 40) * 1.15)); break;
       case 'emoji': ctx.font = `${o.size || 60}px serif`; ctx.textAlign = 'center'; ctx.fillText(o.text, 0, 0); break;
+      default: if (window.Stick.objects[o.type]) window.Stick.objects[o.type](ctx, o, t, { W, H, GROUND }); break;
       case 'zzz': ctx.fillStyle = '#222'; ctx.font = 'bold 34px Arial'; for (let i = 0; i < 3; i++) { const p = ((t * .8 + i / 3) % 1); ctx.globalAlpha = 1 - p; ctx.fillText('Z', p * 40 + i * 10, -p * 80 - i * 12); } break;
     }
     ctx.restore();
   }
 
-  function drawCaption(ctx, text, t0, t) {
+  function drawCaption(ctx, c, t) {
+    const text = c.text, t0 = c.from;
     const p = Math.min(1, (t - t0) / 0.15);
     ctx.save(); ctx.globalAlpha = p;
     ctx.font = 'bold 44px Arial'; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
@@ -255,6 +266,7 @@
   // video = {title, scenes:[{dur, bg, actors:[{id, keys, talk, color, hat, ...}], objects:[{...,from,to}],
   //          captions:[{text, from, to}], bubbles:[{actor, text, from, to}], shake:[from,to], flash:[from,to], cut}]}
   function makeVideo(video, canvas) {
+    if (video.size) { W = video.size[0]; H = video.size[1]; GROUND = video.ground || Math.round(H * 0.8); }
     const ctx = canvas.getContext('2d');
     const total = video.scenes.reduce((s, sc) => s + sc.dur, 0);
     function draw(T) {
@@ -263,7 +275,7 @@
       ctx.save();
       ctx.clearRect(0, 0, W, H);
       if (scene.shake && t >= scene.shake[0] && t <= scene.shake[1]) ctx.translate((Math.random() - .5) * 0 + Math.sin(t * 90) * 6, Math.cos(t * 70) * 6);
-      drawBackground(ctx, scene.bg || {}, t);
+      if ((scene.bg || {}).mood) window.Stick.moodBg(ctx, scene.bg, t, { W, H, GROUND }); else drawBackground(ctx, scene.bg || {}, t);
       (scene.objects || []).forEach((o) => { if ((o.from ?? 0) <= t && t <= (o.to ?? 1e9)) drawObject(ctx, o.keys ? Object.assign({}, o, { x: sample(o.keys, t, 'x', o.x), y: sample(o.keys, t, 'y', o.y), rot: sample(o.keys, t, 'rot', o.rot || 0), scale: sample(o.keys, t, 'scale', o.scale ?? 1) }) : o, t); });
       const pos = {};
       (scene.actors || []).forEach((a) => {
@@ -271,7 +283,8 @@
       });
       (scene.bubbles || []).forEach((b) => { if (b.from <= t && t <= b.to && pos[b.actor]) drawBubble(ctx, b.text, pos[b.actor][0], pos[b.actor][1] - 30, b.from, t); });
       ctx.restore();
-      (scene.captions || []).forEach((c) => { if (c.from <= t && t <= c.to) drawCaption(ctx, c.text, c.from, t); });
+      if (window.Stick.moodPost) window.Stick.moodPost(ctx, scene, t, { W, H, GROUND });
+      (scene.captions || []).forEach((c) => { if (c.from <= t && t <= c.to) (scene.bg && scene.bg.mood ? window.Stick.moodCaption : drawCaption)(ctx, c, t, { W, H, GROUND }); });
       if (scene.flash && t >= scene.flash[0] && t <= scene.flash[1]) { ctx.fillStyle = `rgba(255,255,255,${1 - (t - scene.flash[0]) / (scene.flash[1] - scene.flash[0])})`; ctx.fillRect(0, 0, W, H); }
       // fade in/out per scene
       const fade = scene.fade ?? 0.15;
@@ -281,5 +294,5 @@
     return { draw, total, W, H };
   }
 
-  window.Stick = { makeVideo, POSES, ease, W, H, GROUND };
+  window.Stick = { objects: {}, makeVideo, POSES, ease, W, H, GROUND };
 })();

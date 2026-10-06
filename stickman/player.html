@@ -1,16 +1,20 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Stickman Player</title>
 <style>html,body{margin:0;background:#000;height:100%;display:flex;align-items:center;justify-content:center}
-canvas{height:100vh;aspect-ratio:9/16;background:#fff}</style></head>
+canvas{max-width:100vw;max-height:100vh;background:#000}</style></head>
 <body><canvas id="c" width="1080" height="1920"></canvas>
-<script src="engine.js"></script>
+<script src="engine.js"></script><script src="moody.js"></script>
 <script>
   // usage: player.html?v=videos/demo.js   (preview in real time; the renderer calls window.drawAt(t) instead)
   const params = new URLSearchParams(location.search);
   const s = document.createElement('script');
   s.src = params.get('v') || 'videos/demo.js';
   s.onload = () => {
-    const c = document.getElementById('c'), ctx = c.getContext('2d');
+    const c = document.getElementById('c');
+    const [vw, vh] = window.VIDEO.size || [540, 960];
+    c.width = vw * 2; c.height = vh * 2; window.PX = [c.width, c.height];
+    if (params.has('render')) { c.style.width = c.width + 'px'; c.style.height = c.height + 'px'; c.style.maxWidth = c.style.maxHeight = 'none'; document.body.style.display = 'block'; document.body.style.height = 'auto'; }
+    const ctx = c.getContext('2d');
     ctx.scale(2, 2);
     const vid = Stick.makeVideo(window.VIDEO, c);
     window.TOTAL = vid.total;
