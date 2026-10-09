@@ -22,6 +22,7 @@ import asyncio
 import base64
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -284,13 +285,15 @@ async def tts_all(beats, audio_dir, voice, rate):
 
     audio_dir.mkdir(parents=True, exist_ok=True)
     sem = asyncio.Semaphore(4)
+    # edge-tts doesn't read proxy settings from the environment on its own.
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
 
     async def one(i, beat):
         path = audio_dir / f"{i:04d}.mp3"
         if path.exists() and path.stat().st_size > 0:
             return
         async with sem:
-            await edge_tts.Communicate(beat["narration"], voice, rate=rate).save(str(path))
+            await edge_tts.Communicate(beat["narration"], voice, rate=rate, proxy=proxy).save(str(path))
 
     await asyncio.gather(*(one(i, b) for i, b in enumerate(beats)))
 
