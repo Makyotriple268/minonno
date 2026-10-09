@@ -49,6 +49,7 @@ PAN_W = 1000               # on-screen width of tall panels that scroll vertical
 SEGMENT_GAP = 0.35         # seconds of silence after each narrated beat
 
 MODEL = "claude-opus-5-5"
+GEMINI_MODEL = "gemini-2.5-flash"
 PANELS_PER_REQUEST = 40
 
 
@@ -217,11 +218,74 @@ def encode_panel(path, max_side=1568):
     return base64.standard_b64encode(buf.getvalue()).decode()
 
 
-def write_script(panels, series, extra_style):
-    """panels: list of (global_index, path, chapter_label). Returns list of beats."""
+def ask_claude(system, items, label):
     import anthropic
 
-    client = anthropic.Anthropic()
+    content = []
+    for kind, value in items:
+        if kind == "text":
+            content.append({"type": "text", "text": value})
+        else:
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": encode_panel(value)},
+            })
+    with anthropic.Anthropic().beta.messages.stream(
+        model=MODEL,
+        max_tokens=32000,
+        system=system,
+        messages=[{"role": "user", "content": content}],
+        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCRIPT_SCHEMA}},
+        betas=["server-side-fallback-2026-07-01"],
+        extra_body={"fallbacks": "default"},
+    ) as stream:
+        message = stream.get_final_message()
+
+    if message.stop_reason == "refusal":
+        raise SystemExit(
+            f"Claude declined {label}. "
+            "Remove the offending pages from the CBZ or write those beats by hand in script.json."
+        )
+    if message.stop_reason == "max_tokens":
+        raise SystemExit("Claude's response was cut off; lower PANELS_PER_REQUEST and re-run.")
+    return json.loads("".join(b.text for b in message.content if b.type == "text"))
+
+
+def ask_gemini(system, items, label, model):
+    from google import genai
+    from google.genai import types
+
+    contents = []
+    for kind, value in items:
+        if kind == "text":
+            contents.append(value)
+        else:
+            contents.append(types.Part.from_bytes(data=base64.standard_b64decode(encode_panel(value)),
+                                                  mime_type="image/jpeg"))
+    # The client reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment. Keep a
+    # reference to it: a client that gets garbage-collected closes its connection mid-call.
+    client = genai.Client()
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_json_schema=SCRIPT_SCHEMA,
+            max_output_tokens=32000,
+        ),
+    )
+    if not response.text:
+        reason = response.candidates[0].finish_reason if response.candidates else response.prompt_feedback
+        raise SystemExit(
+            f"Gemini returned nothing for {label} ({reason}). "
+            "Remove the offending pages from the CBZ or write those beats by hand in script.json."
+        )
+    return json.loads(response.text)
+
+
+def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_MODEL):
+    """panels: list of (global_index, path, chapter_label). Returns list of beats."""
     system = SYSTEM_PROMPT
     if extra_style:
         system += f"\n\nExtra style instructions from the channel owner: {extra_style}"
@@ -234,39 +298,22 @@ def write_script(panels, series, extra_style):
         intro += f"Story notes so far:\n{notes}\n" if notes else "This is the start of the recap.\n"
         if start + PANELS_PER_REQUEST >= len(panels):
             intro += "This is the final batch, so end the last beat with a hook for the next chapter.\n"
-        content = [{"type": "text", "text": intro}]
+        items = [("text", intro)]
         last_chapter = None
         for idx, path, chapter in batch:
             if chapter != last_chapter:
-                content.append({"type": "text", "text": f"--- {chapter} ---"})
+                items.append(("text", f"--- {chapter} ---"))
                 last_chapter = chapter
-            content.append({"type": "text", "text": f"Panel {idx}:"})
-            content.append({
-                "type": "image",
-                "source": {"type": "base64", "media_type": "image/jpeg", "data": encode_panel(path)},
-            })
+            items.append(("text", f"Panel {idx}:"))
+            items.append(("image", path))
 
-        print(f"  Claude: panels {batch[0][0]}-{batch[-1][0]} of {len(panels)}...", flush=True)
-        with client.beta.messages.stream(
-            model=MODEL,
-            max_tokens=32000,
-            system=system,
-            messages=[{"role": "user", "content": content}],
-            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCRIPT_SCHEMA}},
-            betas=["server-side-fallback-2026-07-01"],
-            extra_body={"fallbacks": "default"},
-        ) as stream:
-            message = stream.get_final_message()
+        label = f"panels {batch[0][0]}-{batch[-1][0]}"
+        print(f"  {llm.title()}: {label} of {len(panels)}...", flush=True)
+        if llm == "gemini":
+            result = ask_gemini(system, items, label, gemini_model)
+        else:
+            result = ask_claude(system, items, label)
 
-        if message.stop_reason == "refusal":
-            raise SystemExit(
-                f"Claude declined panels {batch[0][0]}-{batch[-1][0]}. "
-                "Remove the offending pages from the CBZ or write those beats by hand in script.json."
-            )
-        if message.stop_reason == "max_tokens":
-            raise SystemExit("Claude's response was cut off; lower PANELS_PER_REQUEST and re-run.")
-        text = "".join(b.text for b in message.content if b.type == "text")
-        result = json.loads(text)
         valid = {idx for idx, _, _ in batch}
         for beat in result["beats"]:
             beat["panels"] = sorted(p for p in beat["panels"] if p in valid)
@@ -548,6 +595,9 @@ def main():
     ap.add_argument("-o", "--output", type=Path, default=Path("recap.mp4"))
     ap.add_argument("--series", default="", help="series name, helps Claude with context")
     ap.add_argument("--style", default="", help='extra narration instructions, e.g. "more dramatic, mention the MC\'s level-ups"')
+    ap.add_argument("--llm", choices=["claude", "gemini"], default="claude",
+                    help="which AI writes the script (needs ANTHROPIC_API_KEY or GEMINI_API_KEY)")
+    ap.add_argument("--gemini-model", default=GEMINI_MODEL, help="Gemini model to use with --llm gemini")
     ap.add_argument("--voice", default="en-US-AndrewNeural", help="edge-tts voice (list with: edge-tts --list-voices)")
     ap.add_argument("--rate", default="+8%", help="speech speed, e.g. +0%%, +15%%")
     ap.add_argument("--fps", type=int, default=30)
@@ -585,10 +635,13 @@ def main():
         print(f"Using existing script: {script_path}")
         beats = json.loads(script_path.read_text(encoding="utf-8"))
     else:
-        if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+        if args.llm == "gemini":
+            if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+                raise SystemExit("GEMINI_API_KEY is not set. See README.md, or put a script.json in the work folder.")
+        elif not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
             raise SystemExit("ANTHROPIC_API_KEY is not set. See README.md, or put a script.json in the work folder.")
-        print("Writing recap script with Claude...")
-        beats = write_script(panels, args.series, args.style)
+        print(f"Writing recap script with {args.llm.title()}...")
+        beats = write_script(panels, args.series, args.style, args.llm, args.gemini_model)
         script_path.write_text(json.dumps(beats, indent=2, ensure_ascii=False), encoding="utf-8")
         shutil.rmtree(work / "audio", ignore_errors=True)
         print(f"Saved {len(beats)} beats to {script_path}")

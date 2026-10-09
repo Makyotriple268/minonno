@@ -20,6 +20,8 @@ Turns manhwa chapters (`.cbz`) into narrated 16:9 recap videos for YouTube.
    - Windows (PowerShell): `setx ANTHROPIC_API_KEY "sk-ant-..."`, then open a new terminal
    - Mac/Linux: `export ANTHROPIC_API_KEY=sk-ant-...`
 
+   Or use Google Gemini instead (free tier available): get a key at https://aistudio.google.com/apikey, set it as `GEMINI_API_KEY` the same way, and add `--llm gemini` to every command.
+
 ## Make a video
 
 ```
@@ -44,6 +46,8 @@ This writes `recap_work/script.json`. Each beat's narration has markers like `[1
 
 | Option | What it does |
 |---|---|
+| `--llm gemini` | Have Gemini write the script instead of Claude (needs `GEMINI_API_KEY`) |
+| `--gemini-model gemini-2.5-flash` | Which Gemini model to use |
 | `--series "Name"` | Gives Claude the series name for context |
 | `--style "..."` | Extra narration instructions, e.g. `"more dramatic, call the MC 'our boy'"` |
 | `--voice en-US-AndrewNeural` | Narrator voice. See all voices with `edge-tts --list-voices`. Good picks: `en-US-AndrewNeural`, `en-US-ChristopherNeural`, `en-US-BrianNeural`, `en-GB-RyanNeural` |
