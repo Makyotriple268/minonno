@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Recap tool outputs
+recap/*_work/
+recap/*.mp4
+recap/*.cbz
+__pycache__/
