@@ -126,8 +126,20 @@ def extract_panels(cbz_path, out_dir):
         strip.paste(p, (0, y))
         y += p.height
 
+    # Short pages (credits, title cards, recruitment banners) are never part of a
+    # continuous strip, so always cut at their edges.
+    cuts, y = set(), 0
+    for p in pages:
+        if p.height < p.width * 1.5:
+            cuts.update((y, y + p.height))
+        y += p.height
+
     gray = np.asarray(strip.convert("L"), dtype=np.float32)
-    runs = merge_small(content_runs(gray))
+    runs = []
+    for s, e in content_runs(gray):
+        bounds = [s] + sorted(c for c in cuts if s < c < e) + [e]
+        runs += list(zip(bounds, bounds[1:]))
+    runs = merge_small(runs)
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     for s, e in runs:
