@@ -1,0 +1,981 @@
+{
+  "title": "My Rich Twin Sister Is EVIL",
+  "characters": [
+    {
+      "name": "Ivy",
+      "gender": "female",
+      "age": "teen",
+      "look": "Long wavy chestnut-brown hair in a low messy ponytail with a small yellow star clip, green eyes, no makeup, faded oversized grey hoodie, patched blue jeans, worn white sneakers. Same face as Celeste.",
+      "voice": "en-US-AnaNeural",
+      "pitch": "-12Hz"
+    },
+    {
+      "name": "Celeste",
+      "gender": "female",
+      "age": "teen",
+      "look": "Identical face to Ivy: long chestnut-brown hair in sleek glossy curls with a gold headband, green eyes, winged eyeliner and red lipstick, white silk blouse, black pleated skirt, pearl necklace, black heeled boots.",
+      "voice": "en-US-EmmaNeural",
+      "pitch": "+12Hz"
+    },
+    {
+      "name": "Leo",
+      "gender": "male",
+      "age": "teen",
+      "look": "Messy black hair, warm brown eyes, navy school blazer worn open with a loose red tie, white shirt, black trousers, headphones around his neck.",
+      "voice": "en-US-BrianNeural",
+      "pitch": "+10Hz"
+    },
+    {
+      "name": "Grandma Rosa",
+      "gender": "female",
+      "age": "elder",
+      "look": "Grey hair in a neat bun, round gold glasses, warm brown eyes, maroon knitted cardigan over a floral dress, white diner apron.",
+      "voice": "en-GB-SoniaNeural",
+      "pitch": "-15Hz"
+    },
+    {
+      "name": "Victoria",
+      "gender": "female",
+      "age": "adult",
+      "look": "Platinum-blonde elegant updo, blue eyes, emerald-green satin gown, diamond drop earrings, white gloves.",
+      "voice": "en-US-AvaNeural",
+      "pitch": "+0Hz"
+    },
+    {
+      "name": "Richard",
+      "gender": "male",
+      "age": "adult",
+      "look": "Slicked-back dark hair with grey at the temples, short beard, grey eyes, navy three-piece suit, gold tie and gold watch.",
+      "voice": "en-US-GuyNeural",
+      "pitch": "+0Hz"
+    }
+  ],
+  "locations": [
+    {
+      "name": "diner",
+      "description": "A small cosy 1950s-style diner at evening: red vinyl booths, checkered black-and-white floor, a counter with chrome stools, warm yellow lights and rain on the windows."
+    },
+    {
+      "name": "school hallway",
+      "description": "A grand private-academy hallway in bright morning light: polished marble floor, tall arched windows, dark wooden lockers with gold trim, a crest banner reading Ashford Academy."
+    },
+    {
+      "name": "mansion living room",
+      "description": "A huge luxurious living room in afternoon light: white marble floor, a crystal chandelier, a small indoor fountain, cream sofas, gold-framed paintings and a grand staircase behind."
+    },
+    {
+      "name": "celeste bedroom night",
+      "description": "A lavish pink and gold bedroom at night: canopy bed, vanity mirror ringed with bulbs, designer bags on shelves, dark window with city lights, moody purple lamp glow."
+    },
+    {
+      "name": "small apartment",
+      "description": "A tiny but warm apartment kitchen-living room in the evening: peeling pastel wallpaper, an old sofa with a crocheted blanket, family photos on the fridge, a single warm lamp."
+    },
+    {
+      "name": "school cafeteria",
+      "description": "A fancy school cafeteria at lunchtime: long white tables, big windows with sunshine, a salad bar, potted plants and students' trays."
+    },
+    {
+      "name": "ballroom",
+      "description": "A glittering mansion ballroom at night for a charity gala: gold chandeliers, marble pillars, round tables with white cloths and candles, a string quartet stage, deep red curtains."
+    },
+    {
+      "name": "mansion garden night",
+      "description": "A mansion garden at night: trimmed hedges, a stone fountain, fairy lights on the trees, a dark blue sky with stars, the bright mansion windows in the distance."
+    },
+    {
+      "name": "school rooftop",
+      "description": "A school rooftop at sunset: a chain-link fence, a bench, orange and pink sky over the city skyline, a few potted plants."
+    }
+  ],
+  "scenes": [
+    {
+      "background": "diner",
+      "cast": [
+        "Ivy",
+        "Grandma Rosa"
+      ],
+      "lines": [
+        {
+          "speaker": "Narrator",
+          "text": "Seventeen years ago, two baby girls were born on the same stormy night.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "One went home with a millionaire family. The other... didn't go home at all.",
+          "expression": "neutral",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Grandma! Table six left a five dollar tip!",
+          "expression": "happy",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "Look at you, mija. Saving every penny.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Every penny for college. That's the plan.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "I wish I could give you more, Ivy.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "You gave me everything. You took me in when nobody else would.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "Speaking of... a letter came for you today.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Wait. That's the Ashford Academy logo!",
+          "expression": "shocked",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "*opens letter* I got the full scholarship?!",
+          "expression": "shocked",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "My girl is going to the richest school in the city!",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Rich kids can't be that bad, right?",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "She was about to find out.",
+          "expression": "neutral",
+          "effect": "zoom"
+        }
+      ]
+    },
+    {
+      "background": "school hallway",
+      "cast": [
+        "Ivy",
+        "Leo",
+        "Celeste"
+      ],
+      "lines": [
+        {
+          "speaker": "Ivy",
+          "text": "This hallway is bigger than our whole apartment...",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "First day? You look lost.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Is it that obvious?",
+          "expression": "blush",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "I'm Leo. Scholarship kid too. We have to stick together.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "I'm Ivy. Nice to meet you!",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Excuse me, you're blocking my locker, you-",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "...What.",
+          "expression": "shocked",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "You... you have my face!",
+          "expression": "shocked",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "No. YOU have MY face.",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "There are TWO of you?!",
+          "expression": "shocked",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "*stares* Where did you get those eyes? That nose?",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "I don't know. I never met my parents. My grandma took me in.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Interesting. Very interesting.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Let's be friends, Ivy! Come to my house after school.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Really? Okay!",
+          "expression": "happy",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Leo",
+          "text": "(whispers) Be careful. Celeste Ashford doesn't make friends. She makes victims.",
+          "expression": "neutral",
+          "effect": "none"
+        }
+      ]
+    },
+    {
+      "background": "mansion living room",
+      "cast": [
+        "Ivy",
+        "Celeste",
+        "Victoria",
+        "Richard"
+      ],
+      "lines": [
+        {
+          "speaker": "Ivy",
+          "text": "You LIVE here? There's a fountain. Inside.",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Three fountains, actually. Mother! Father! Come see!",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Celeste? And... another Celeste?!",
+          "expression": "shocked",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Good heavens. Am I seeing double?",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "This is Ivy. We met at school. Isn't it funny?",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Richard... the hospital. Seventeen years ago.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Victoria, not now.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "What hospital? What are you talking about?",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "When we adopted Celeste, the nurse said there was another baby. A sister.",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "But the papers were lost. We searched for months. We never found her.",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "So she's my twin sister? I have a real family?",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Richard",
+          "text": "It seems you do, young lady.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Oh, sweetheart. Come here!",
+          "expression": "happy",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "*smiles* Welcome to the family... sister.",
+          "expression": "smug",
+          "effect": "zoom"
+        }
+      ]
+    },
+    {
+      "background": "celeste bedroom night",
+      "cast": [
+        "Celeste"
+      ],
+      "lines": [
+        {
+          "speaker": "Celeste",
+          "text": "Seventeen years. Seventeen years I was the ONLY one.",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Mother looked at her like she was some lost treasure.",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "And Father's will leaves everything to 'our daughter.'",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Not daughters. Daughter. Singular.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "So one of us has to go. And it won't be me.",
+          "expression": "smug",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "Celeste had a plan. And it started with a diamond necklace.",
+          "expression": "neutral",
+          "effect": "none"
+        }
+      ]
+    },
+    {
+      "background": "small apartment",
+      "cast": [
+        "Ivy",
+        "Grandma Rosa"
+      ],
+      "lines": [
+        {
+          "speaker": "Ivy",
+          "text": "Grandma, they want me to visit every weekend!",
+          "expression": "happy",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "Rich people, mija... they don't always give without taking.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Celeste is so nice to me, though. She's even lending me her clothes.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "Hmm. A girl who has everything, suddenly sharing?",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "You sound like Leo.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "Then Leo is a smart boy. Promise me you'll keep your eyes open.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "I promise. Love you, Grandma.",
+          "expression": "happy",
+          "effect": "none"
+        }
+      ]
+    },
+    {
+      "background": "school cafeteria",
+      "cast": [
+        "Leo",
+        "Ivy",
+        "Celeste"
+      ],
+      "lines": [
+        {
+          "speaker": "Celeste",
+          "text": "Ivy! I saved you a seat. And I brought you a gift!",
+          "expression": "happy",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "A designer bag? Celeste, I can't take this!",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Nonsense. Sisters share everything.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "(quietly) Since when does she share anything?",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Did you say something, scholarship boy?",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Nope. Just eating my sandwich.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Bring the bag to the gala on Saturday. Mother will love it.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Ivy, I've known her three years. She's never been nice for free.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Maybe she's changed. Maybe she was lonely too.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Or maybe that bag isn't a gift. Can I see it for a second?",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Fine. But you're being paranoid.",
+          "expression": "smug",
+          "effect": "none"
+        }
+      ]
+    },
+    {
+      "background": "ballroom",
+      "cast": [
+        "Ivy",
+        "Celeste",
+        "Victoria",
+        "Richard"
+      ],
+      "lines": [
+        {
+          "speaker": "Narrator",
+          "text": "Saturday night. The Ashford charity gala.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Ivy, you look beautiful!",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Thank you, Mrs. Ashford.",
+          "expression": "blush",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Wait... my necklace. My grandmother's diamond necklace is gone!",
+          "expression": "shocked",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Security! Lock the doors!",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Mother, who would do such a thing?",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "*looks at Ivy's bag* Ivy... why is your bag sparkling?",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "What? No, I didn't-",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Open the bag. Now.",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "*opens bag* The necklace? How is it in here?!",
+          "expression": "shocked",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "We opened our home to you. And you steal from us?",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "I swear I didn't take it! Celeste gave me this bag!",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "How could you blame me? I trusted you!",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Get out of my house. And never come back.",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "(whispers) Bye-bye, sister.",
+          "expression": "smug",
+          "effect": "zoom"
+        }
+      ]
+    },
+    {
+      "background": "mansion garden night",
+      "cast": [
+        "Ivy",
+        "Leo"
+      ],
+      "lines": [
+        {
+          "speaker": "Ivy",
+          "text": "I finally found my family... and they think I'm a thief.",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Ivy. I'm so sorry. I came as soon as you texted.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "It was her, Leo. It was Celeste all along.",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "I know. And I think I can prove it.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "What do you mean?",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Remember when I looked at the bag in the cafeteria?",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "I slipped my old phone into the side pocket. Recording.",
+          "expression": "smug",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Leo! That's... genius!",
+          "expression": "happy",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Listen to this part.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "'Plant the necklace, cry a little, and she's gone forever.'",
+          "expression": "neutral",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "That's Celeste's voice. She planned the whole thing.",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Then it's time the Ashfords heard it too.",
+          "expression": "angry",
+          "effect": "zoom"
+        }
+      ]
+    },
+    {
+      "background": "small apartment",
+      "cast": [
+        "Ivy",
+        "Grandma Rosa"
+      ],
+      "lines": [
+        {
+          "speaker": "Grandma Rosa",
+          "text": "They called my granddaughter a THIEF?!",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "It's okay, Grandma. We have proof.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Grandma Rosa",
+          "text": "Then get your coat. Let's go ruin a rich girl's day.",
+          "expression": "smug",
+          "effect": "jump"
+        }
+      ]
+    },
+    {
+      "background": "mansion living room",
+      "cast": [
+        "Ivy",
+        "Celeste",
+        "Victoria",
+        "Richard"
+      ],
+      "lines": [
+        {
+          "speaker": "Richard",
+          "text": "I told you never to come back.",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Give me five minutes. Then I'll leave forever.",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Let her talk, Father. It's sad, really.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "*presses play*",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "'Plant the necklace, cry a little, and she's gone forever. Father's money stays mine.'",
+          "expression": "neutral",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "That's... Celeste's voice.",
+          "expression": "shocked",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Celeste. Explain. Now.",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "It's fake! She made it with AI!",
+          "expression": "shocked",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "There's more. Keep listening.",
+          "expression": "smug",
+          "effect": "none"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "'And if Mother asks, I'll just cry. She always believes the tears.'",
+          "expression": "neutral",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Always believes the tears?!",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "FINE! Yes, I did it! She was going to take everything!",
+          "expression": "angry",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "You looked at her like she was perfect. Like I was never enough!",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Celeste... we loved you. We still do. But what you did was cruel.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Richard",
+          "text": "You're going to Saint Agnes Boarding School. Effective tomorrow.",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "The one with no phones?! NO!",
+          "expression": "shocked",
+          "effect": "jump"
+        },
+        {
+          "speaker": "Victoria",
+          "text": "Ivy, can you ever forgive us?",
+          "expression": "crying",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "You believed her without even asking me.",
+          "expression": "sad",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "But I'd like to try. As long as Grandma Rosa stays in my life.",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Richard",
+          "text": "Of course. She raised you into an honest young woman.",
+          "expression": "happy",
+          "effect": "none"
+        }
+      ]
+    },
+    {
+      "background": "school rooftop",
+      "cast": [
+        "Ivy",
+        "Leo"
+      ],
+      "lines": [
+        {
+          "speaker": "Leo",
+          "text": "So. Ashford heiress now, huh?",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "I still work Saturdays at the diner. Grandma insists.",
+          "expression": "happy",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Can I visit you there? Maybe... as a date?",
+          "expression": "blush",
+          "effect": "none"
+        },
+        {
+          "speaker": "Ivy",
+          "text": "Only if you leave a good tip.",
+          "expression": "blush",
+          "effect": "none"
+        },
+        {
+          "speaker": "Leo",
+          "text": "Deal!",
+          "expression": "happy",
+          "effect": "jump"
+        }
+      ]
+    },
+    {
+      "background": "celeste bedroom night",
+      "cast": [
+        "Celeste"
+      ],
+      "lines": [
+        {
+          "speaker": "Narrator",
+          "text": "That night, while Celeste packed for boarding school...",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "They think this is over.",
+          "expression": "angry",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "*finds an old hospital file* Wait. What's this?",
+          "expression": "neutral",
+          "effect": "none"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "'Birth record: baby girl A, baby girl B... and baby girl C?'",
+          "expression": "shocked",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Twins? No. TRIPLETS.",
+          "expression": "smug",
+          "effect": "shake"
+        },
+        {
+          "speaker": "Celeste",
+          "text": "Hello, sister number three. Let's make a deal.",
+          "expression": "smug",
+          "effect": "zoom"
+        },
+        {
+          "speaker": "Narrator",
+          "text": "To be continued...",
+          "expression": "neutral",
+          "effect": "none"
+        }
+      ]
+    }
+  ]
+}

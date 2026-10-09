@@ -1,0 +1,33 @@
+# My Rich Twin Sister Is EVIL
+
+## Characters to make in Gacha Club
+
+Export each pose as a PNG into characters/<Name>/<pose>.png
+(transparent or plain green-screen background; it's removed automatically).
+
+- Ivy (teen female): Long wavy chestnut-brown hair in a low messy ponytail with a small yellow star clip, green eyes, no makeup, faded oversized grey hoodie, patched blue jeans, worn white sneakers. Same face as Celeste.
+    poses: neutral, happy, sad, angry, shocked, smug, crying, blush
+- Celeste (teen female): Identical face to Ivy: long chestnut-brown hair in sleek glossy curls with a gold headband, green eyes, winged eyeliner and red lipstick, white silk blouse, black pleated skirt, pearl necklace, black heeled boots.
+    poses: neutral, happy, sad, angry, shocked, smug, crying
+- Leo (teen male): Messy black hair, warm brown eyes, navy school blazer worn open with a loose red tie, white shirt, black trousers, headphones around his neck.
+    poses: neutral, happy, sad, shocked, smug, blush
+- Grandma Rosa (elder female): Grey hair in a neat bun, round gold glasses, warm brown eyes, maroon knitted cardigan over a floral dress, white diner apron.
+    poses: neutral, happy, sad, angry, smug, crying
+- Victoria (adult female): Platinum-blonde elegant updo, blue eyes, emerald-green satin gown, diamond drop earrings, white gloves.
+    poses: neutral, happy, sad, angry, shocked, crying
+- Richard (adult male): Slicked-back dark hair with grey at the temples, short beard, grey eyes, navy three-piece suit, gold tie and gold watch.
+    poses: neutral, happy, sad, angry, shocked
+
+## Backgrounds
+
+Save into backgrounds/<name>.png
+
+- diner
+- school hallway
+- mansion living room
+- celeste bedroom night
+- small apartment
+- school cafeteria
+- ballroom
+- mansion garden night
+- school rooftop
