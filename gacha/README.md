@@ -21,10 +21,18 @@ Makes Gacha Life / Gacha Club style story videos (GLMMs) from a one-line idea.
 python gacha_story.py write "the new girl is secretly a princess" -o princess.json
 ```
 
-Options: `--length short|medium|long` (about 2-3, 5-7 or 10-15 minutes), `--style "funny, lots of plot twists"`.
+Options: `--minutes 8` (target length), or `--length short|medium|long` (about 2-3, 5-7 or 10-15 minutes), and `--style "funny, lots of plot twists"`.
 This saves `princess.json` (the script; edit it freely) and `princess_checklist.txt` (what to make).
 
-**2. Make the characters in Gacha Club**
+**2a. Let Gemini draw the art**
+
+```
+python gacha_story.py art princess.json
+```
+
+Gemini draws each character in Gacha style, then edits that same image for every expression so the character stays consistent, and paints a background for every location in the story. Delete any image you don't like and run `art` again to redraw just that one. Image generation uses Gemini's image model, which may not be free on your plan.
+
+**2b. Or make the characters in Gacha Club yourself**
 
 For each character on the checklist, build them in Gacha Club and export one image per pose:
 

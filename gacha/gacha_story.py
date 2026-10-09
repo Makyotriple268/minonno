@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """Make Gacha Life / Gacha Club style story videos (GLMMs) from a one-line idea.
 
-Two steps:
+Steps:
 
-  1. write   - an AI turns your idea into a script: cast, scenes, dialogue,
-               expressions and effects. It also prints a checklist of the
-               character poses and backgrounds to make.
-  2. render  - every line is voiced (a different free Microsoft voice per
+  1. write   - an AI turns your idea into a script: cast, locations, scenes,
+               dialogue, expressions and effects. It also prints a checklist
+               of the character poses and backgrounds the story needs.
+  2. art     - (optional) Gemini draws the characters in Gacha style, one
+               image per expression, and paints a background per location.
+               Skip it to use your own Gacha Club exports instead.
+  3. render  - every line is voiced (a different free Microsoft voice per
                character), then the video is built to match: characters on a
                background, a dialogue box that types out in sync with the
                voice, and jumps, shakes and zooms for drama.
 
 Usage:
-  python gacha_story.py write "a shy girl finds out her crush is a vampire" -o story.json
+  python gacha_story.py write "a shy girl finds out her crush is a vampire" -o story.json --minutes 8
+  python gacha_story.py art story.json
   python gacha_story.py render story.json -o story.mp4
 
 Characters come from Gacha Club: characters/<Name>/<expression>.png
@@ -44,6 +48,7 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
 CLAUDE_MODEL = "claude-opus-5-5"
 GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 
 LINE_GAP = 0.35        # silence after each line (seconds)
 SCENE_GAP = 0.8        # extra pause and fade between scenes
@@ -107,7 +112,9 @@ expressions generously; they carry the emotion.
 - Effects are optional: "jump" for excitement or surprise, "shake" for \
 anger or shock, "zoom" for a dramatic line or reveal. Most lines use "none".
 - Backgrounds are short names like "school hallway" or "bedroom night". \
-Reuse the same name for the same place."""
+Reuse the same name for the same place. List every background once under \
+locations with a vivid visual description (setting, time of day, lighting, \
+colours, mood) that an artist could paint from."""
 
 STORY_SCHEMA = {
     "type": "object",
@@ -124,6 +131,18 @@ STORY_SCHEMA = {
                     "look": {"type": "string"},
                 },
                 "required": ["name", "gender", "age", "look"],
+                "additionalProperties": False,
+            },
+        },
+        "locations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                },
+                "required": ["name", "description"],
                 "additionalProperties": False,
             },
         },
@@ -154,7 +173,7 @@ STORY_SCHEMA = {
             },
         },
     },
-    "required": ["title", "characters", "scenes"],
+    "required": ["title", "characters", "locations", "scenes"],
     "additionalProperties": False,
 }
 
@@ -219,9 +238,16 @@ def existing_assets(char_dir, bg_dir):
     return chars, bgs
 
 
-def write_story(idea, length, llm, gemini_model, char_dir, bg_dir, style):
+LINES_PER_MINUTE = 17  # measured: short dialogue lines plus pauses
+
+
+def write_story(idea, length, llm, gemini_model, char_dir, bg_dir, style, minutes=None):
     chars, bgs = existing_assets(char_dir, bg_dir)
-    prompt = f"Story idea: {idea}\n\nLength: {LENGTHS[length]}.\n"
+    if minutes:
+        size = f"about {round(minutes * LINES_PER_MINUTE)} lines of dialogue in total (a {minutes:g} minute video)"
+    else:
+        size = LENGTHS[length]
+    prompt = f"Story idea: {idea}\n\nLength: {size}.\n"
     if style:
         prompt += f"Style notes from the channel owner: {style}\n"
     if chars:
@@ -255,6 +281,11 @@ def clean_story(story):
             if line.get("effect") not in EFFECTS:
                 line["effect"] = "none"
         scene["cast"] = cast[:5]
+    known = {loc["name"] for loc in story.setdefault("locations", [])}
+    for scene in story["scenes"]:
+        if scene["background"] not in known:
+            story["locations"].append({"name": scene["background"], "description": scene["background"]})
+            known.add(scene["background"])
     return story
 
 
@@ -406,7 +437,8 @@ def remove_flat_background(img):
         return img
     corners = np.array([a[0, 0, :3], a[0, -1, :3], a[-1, 0, :3], a[-1, -1, :3]])
     bg = np.median(corners, axis=0)
-    close = (np.abs(a[..., :3] - bg).sum(axis=2) < 60)
+    diff = np.abs(a[..., :3] - bg).sum(axis=2)
+    close = diff < 90  # generous: AI-drawn "flat" screens are slightly noisy
     # Only clear background pixels reachable from the border, so matching colours
     # inside the character (a green shirt on a green screen) survive.
     from collections import deque
@@ -422,6 +454,15 @@ def remove_flat_background(img):
             if 0 <= ny < h and 0 <= nx < w and close[ny, nx] and not seen[ny, nx]:
                 seen[ny, nx] = True
                 q.append((ny, nx))
+    # Clean the fringe: edge pixels still tinted by the screen colour.
+    near = diff < 200
+    for _ in range(2):
+        grown = seen.copy()
+        grown[1:] |= seen[:-1]
+        grown[:-1] |= seen[1:]
+        grown[:, 1:] |= seen[:, :-1]
+        grown[:, :-1] |= seen[:, 1:]
+        seen |= grown & near
     out = np.asarray(img).copy()
     out[seen, 3] = 0
     return Image.fromarray(out)
@@ -571,6 +612,126 @@ class Backgrounds:
                 img = placeholder_background(name)
             self.cache[name] = img
         return self.cache[name]
+
+
+# --------------------------------------------------------------------------
+# 2b. Art (optional): Gemini draws characters and backgrounds
+# --------------------------------------------------------------------------
+
+STYLE = ("Gacha Club / Gacha Life 2D art style: chibi proportions with a big head and small body, "
+         "large shiny anime eyes, clean dark outlines, flat cel shading, bright colours")
+
+EXPRESSION_PROMPTS = {
+    "happy": "a big happy open-mouthed smile and bright eyes",
+    "sad": "a sad face: worried eyebrows, downturned mouth, teary eyes",
+    "angry": "an angry face: furrowed eyebrows, glaring eyes, gritted teeth",
+    "shocked": "a shocked face: very wide eyes, small pupils, mouth wide open",
+    "smug": "a smug face: a sly smirk, half-closed eyes, one eyebrow raised",
+    "crying": "crying: tears streaming down both cheeks, mouth open in a sob",
+    "blush": "a shy face: pink blushing cheeks, small embarrassed smile, eyes looking aside",
+}
+
+
+def image_from_response(response):
+    for cand in response.candidates or []:
+        for part in (cand.content.parts if cand.content else []) or []:
+            if part.inline_data and part.inline_data.data:
+                from io import BytesIO
+                return Image.open(BytesIO(part.inline_data.data))
+    return None
+
+
+def generate_image(client, model, contents, aspect, what):
+    """One Gemini image call, retried on rate limits and empty results."""
+    import time
+    from google.genai import errors, types
+
+    config = types.GenerateContentConfig(response_modalities=["IMAGE"],
+                                         image_config=types.ImageConfig(aspect_ratio=aspect))
+    for attempt in range(5):
+        try:
+            img = image_from_response(client.models.generate_content(model=model, contents=contents, config=config))
+            if img is not None:
+                return img
+            print(f"    no image returned for {what}, retrying...", flush=True)
+        except errors.APIError as e:
+            if e.code not in (429, 500, 503) or attempt == 4:
+                raise SystemExit(f"Gemini image error for {what}: {e}")
+            wait = 15 * (attempt + 1)
+            print(f"    Gemini busy ({e.code}), waiting {wait}s...", flush=True)
+            time.sleep(wait)
+    raise SystemExit(f"Gemini kept returning no image for {what}. Try again, or make that art by hand.")
+
+
+def screen_colour(look):
+    """Flat background colour the character is drawn on (removed later). Avoid clashing with the outfit."""
+    return ("magenta", (255, 0, 255)) if "green" in look.lower() else ("green", (0, 255, 0))
+
+
+def poses_needed(story):
+    needed = {}
+    for scene in story["scenes"]:
+        for name in scene["cast"]:
+            needed.setdefault(name, {"neutral"})
+        for line in scene["lines"]:
+            if line["speaker"] != NARRATOR:
+                needed.setdefault(line["speaker"], {"neutral"}).add(line["expression"])
+    return needed
+
+
+def cmd_art(args):
+    from google import genai
+
+    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+        raise SystemExit("GEMINI_API_KEY is not set. See README.md.")
+    story = clean_story(json.loads(args.story.read_text(encoding="utf-8")))
+    client = genai.Client()
+    model = args.image_model
+    made = 0
+
+    looks = {c["name"]: c for c in story["characters"]}
+    for name, poses in poses_needed(story).items():
+        c = looks.get(name, {"look": "", "gender": "female", "age": "teen"})
+        folder = args.characters / name
+        folder.mkdir(parents=True, exist_ok=True)
+        colour_name, rgb = screen_colour(c.get("look", ""))
+        base_path = folder / "neutral.png"
+        if not base_path.exists():
+            print(f"Drawing {name}...", flush=True)
+            prompt = (f"Full-body character sprite of a {c.get('age', 'teen')} {c.get('gender', 'female')} "
+                      f"character: {c.get('look', '')}. Standing upright facing the viewer with a calm neutral "
+                      f"expression, arms relaxed, the whole body visible from the top of the head to the shoes, "
+                      f"centred with empty space around it. {STYLE}. The background must be a perfectly flat, "
+                      f"pure {colour_name} colour (RGB {rgb}) with no shadow, floor, gradient or scenery. "
+                      "No text, no border, only this one character.")
+            generate_image(client, model, [prompt], "2:3", f"{name} neutral").save(base_path)
+            made += 1
+        base = Image.open(base_path)
+        for pose in sorted(poses - {"neutral"}, key=EXPRESSIONS.index):
+            path = folder / f"{pose}.png"
+            if path.exists():
+                continue
+            print(f"  {name}: {pose}", flush=True)
+            prompt = (f"Edit this image. Keep exactly the same character: same hair, eyes, outfit, colours, "
+                      f"body, pose, size, position and art style, on the same flat pure {colour_name} "
+                      f"background. Change only the face to show {EXPRESSION_PROMPTS[pose]}.")
+            generate_image(client, model, [base, prompt], "2:3", f"{name} {pose}").save(path)
+            made += 1
+
+    args.backgrounds.mkdir(parents=True, exist_ok=True)
+    for loc in story["locations"]:
+        if resolve_background(loc["name"], args.backgrounds):
+            continue
+        print(f"Painting background: {loc['name']}", flush=True)
+        prompt = (f"Beautiful anime visual-novel background art of {loc['description']}. "
+                  "Detailed, vibrant colours, soft cinematic lighting, Gacha Club backdrop style. "
+                  "Wide eye-level shot with open floor space in the lower middle where characters will stand. "
+                  "Absolutely no people, characters, animals or text.")
+        generate_image(client, model, [prompt], "16:9", loc["name"]).save(args.backgrounds / f"{loc['name']}.png")
+        made += 1
+    print(f"\nDone: {made} new images in {args.characters}/ and {args.backgrounds}/. Look them over, redo any "
+          f"you don't like by deleting the file and running art again, then:\n"
+          f"  python gacha_story.py render {args.story}")
 
 
 # --------------------------------------------------------------------------
@@ -787,7 +948,8 @@ def cmd_write(args):
         raise SystemExit("GEMINI_API_KEY is not set. See README.md.")
     if args.llm == "claude" and not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
         raise SystemExit("ANTHROPIC_API_KEY is not set. See README.md.")
-    story = write_story(args.idea, args.length, args.llm, args.gemini_model, args.characters, args.backgrounds, args.style)
+    story = write_story(args.idea, args.length, args.llm, args.gemini_model, args.characters, args.backgrounds,
+                        args.style, args.minutes)
     assign_voices(story)
     args.output.write_text(json.dumps(story, indent=2, ensure_ascii=False), encoding="utf-8")
     lines = sum(len(s["lines"]) for s in story["scenes"])
@@ -796,7 +958,10 @@ def cmd_write(args):
     todo_path = args.output.with_name(args.output.stem + "_checklist.txt")
     todo_path.write_text(todo, encoding="utf-8")
     print(todo)
-    print(f"(Also saved to {todo_path}.) Edit {args.output} if you like, then run:\n"
+    print(f"(Also saved to {todo_path}.) Edit {args.output} if you like. Then either make the art in\n"
+          f"Gacha Club, or have Gemini draw it:\n"
+          f"  python gacha_story.py art {args.output}\n"
+          f"and render:\n"
           f"  python gacha_story.py render {args.output}")
 
 
@@ -843,9 +1008,14 @@ def main():
     w.add_argument("idea", help='one-line story idea, e.g. "the new girl is secretly a princess"')
     w.add_argument("-o", "--output", type=Path, default=Path("story.json"))
     w.add_argument("--length", choices=list(LENGTHS), default="medium")
+    w.add_argument("--minutes", type=float, help="target video length in minutes (overrides --length)")
     w.add_argument("--style", default="", help='extra instructions, e.g. "funny, lots of plot twists"')
     w.add_argument("--llm", choices=["gemini", "claude"], default="gemini")
     w.add_argument("--gemini-model", default=GEMINI_MODEL)
+
+    a = sub.add_parser("art", help="have Gemini draw the characters and backgrounds for a script")
+    a.add_argument("story", type=Path)
+    a.add_argument("--image-model", default=GEMINI_IMAGE_MODEL)
 
     r = sub.add_parser("render", help="voice a story script and render the video")
     r.add_argument("story", type=Path)
@@ -857,12 +1027,12 @@ def main():
     r.add_argument("--no-flip", action="store_true",
                    help="don't mirror characters on the right side to face the centre")
 
-    for p in (w, r):
+    for p in (w, a, r):
         p.add_argument("--characters", type=Path, default=Path("characters"))
         p.add_argument("--backgrounds", type=Path, default=Path("backgrounds"))
 
     args = ap.parse_args()
-    {"write": cmd_write, "render": cmd_render}[args.command](args)
+    {"write": cmd_write, "art": cmd_art, "render": cmd_render}[args.command](args)
 
 
 if __name__ == "__main__":
