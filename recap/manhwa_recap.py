@@ -47,7 +47,6 @@ W, H = 1920, 1080
 FG_MAX_W = 1300            # widest the panel itself may be on screen
 PAN_W = 1000               # on-screen width of tall panels that scroll vertically
 SEGMENT_GAP = 0.35         # seconds of silence after each narrated beat
-MIN_PANEL_SECONDS = 1.2
 
 MODEL = "claude-opus-5-5"
 PANELS_PER_REQUEST = 40
@@ -173,6 +172,15 @@ panel numbers in ascending order, beats never overlap, and together they \
 cover the panels in order. Leave out panels that carry no story (credits, \
 translator notes, blank or pure sound-effect panels) by not listing them.
 
+The narration is voiced first and the video then cuts to each panel on the \
+exact word you mark. Inside each beat's narration, put a marker like [12] \
+right before the words that go with panel 12. The narration starts with a \
+marker, every panel in the beat appears exactly once as a marker, in \
+ascending order, and markers sit only between words, never inside one. Give \
+each panel at least a few words so it stays on screen long enough to see; \
+for a quick run of action panels, place the markers a few words apart rather \
+than side by side.
+
 Also return updated notes: a short running summary of the story so far plus \
 the characters and their names. These notes are handed back to you with the \
 next batch of panels so the narration stays consistent."""
@@ -262,6 +270,10 @@ def write_script(panels, series, extra_style):
         valid = {idx for idx, _, _ in batch}
         for beat in result["beats"]:
             beat["panels"] = sorted(p for p in beat["panels"] if p in valid)
+            # Drop markers for panels that aren't in this beat.
+            beat["narration"] = MARKER.sub(
+                lambda m: m.group(0) if int(m.group(1)) in beat["panels"] else "", beat["narration"]
+            )
             if beat["panels"] and beat["narration"].strip():
                 beats.append(beat)
         notes = result["notes"]
@@ -280,7 +292,22 @@ def probe_duration(path):
     return float(out.stdout.strip())
 
 
+MARKER = re.compile(r"\[(\d+)\]\s*")
+
+
+def parse_markers(narration):
+    """Split '[12] Text [13] more' into ('Text more', [(12, 0), (13, 5)])."""
+    clean, markers, last = "", [], 0
+    for m in MARKER.finditer(narration):
+        clean += narration[last:m.start()]
+        markers.append((int(m.group(1)), len(clean)))
+        last = m.end()
+    clean += narration[last:]
+    return clean.strip(), markers
+
+
 async def tts_all(beats, audio_dir, voice, rate):
+    """Voice each beat; save <i>.mp3 plus <i>.json with the start time of every word."""
     import edge_tts
 
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -290,12 +317,64 @@ async def tts_all(beats, audio_dir, voice, rate):
 
     async def one(i, beat):
         path = audio_dir / f"{i:04d}.mp3"
-        if path.exists() and path.stat().st_size > 0:
+        words_path = audio_dir / f"{i:04d}.json"
+        if path.exists() and path.stat().st_size > 0 and words_path.exists():
             return
+        text, _ = parse_markers(beat["narration"])
         async with sem:
-            await edge_tts.Communicate(beat["narration"], voice, rate=rate, proxy=proxy).save(str(path))
+            comm = edge_tts.Communicate(text, voice, rate=rate, proxy=proxy, boundary="WordBoundary")
+            audio, words = bytearray(), []
+            async for chunk in comm.stream():
+                if chunk["type"] == "audio":
+                    audio += chunk["data"]
+                elif chunk["type"] == "WordBoundary":
+                    words.append({"text": chunk["text"], "start": chunk["offset"] / 1e7})
+        path.write_bytes(audio)
+        words_path.write_text(json.dumps(words), encoding="utf-8")
 
     await asyncio.gather(*(one(i, b) for i, b in enumerate(beats)))
+
+
+def panel_cues(beat, words, duration, panel_paths):
+    """Return [(panel, seconds_on_screen)] for one beat, switching on the marked words.
+
+    Falls back to splitting the time evenly (tall panels get more) when the
+    narration has no usable markers.
+    """
+    text, markers = parse_markers(beat["narration"])
+    if not markers or [p for p, _ in markers] != beat["panels"]:
+        weights = []
+        for p in beat["panels"]:
+            with Image.open(panel_paths[p]) as im:
+                weights.append(max(1.0, min(2.5, im.height / im.width)))
+        return [(p, duration * w / sum(weights)) for p, w in zip(beat["panels"], weights)]
+
+    # Find where each spoken word sits in the text, then each marker's word.
+    positions, cursor = [], 0
+    for w in words:
+        pos = text.find(w["text"], cursor)
+        if pos < 0:
+            pos = cursor
+        positions.append(pos)
+        cursor = pos + len(w["text"])
+    times = []
+    for _, char_pos in markers:
+        t = next((w["start"] for w, pos in zip(words, positions) if pos >= char_pos), duration)
+        times.append(t)
+    times[0] = 0.0
+    times.append(duration)
+
+    # Markers with no words between them share the time until the next word.
+    i = 0
+    while i < len(markers):
+        j = i
+        while j + 1 < len(markers) and times[j + 1] <= times[i]:
+            j += 1
+        span = (times[j + 1] - times[i]) / (j - i + 1)
+        for k in range(i, j + 1):
+            times[k] = times[i] + span * (k - i)
+        i = j + 1
+    return [(p, times[k + 1] - times[k]) for k, (p, _) in enumerate(markers)]
 
 
 def build_narration_track(beats, audio_dir, out_wav):
@@ -366,22 +445,21 @@ def panel_frames(path, n_frames):
         yield frame.tobytes()
 
 
-def render_video(beats, panel_paths, durations, narration_wav, out_path, fps, music, music_volume):
-    # Split each beat's duration across its panels, weighting tall panels (they pan) a bit more.
-    timeline = []
-    for beat, dur in zip(beats, durations):
-        paths = [panel_paths[i] for i in beat["panels"]]
-        weights = []
-        for p in paths:
-            with Image.open(p) as im:
-                weights.append(max(1.0, min(2.5, im.height / im.width)))
-        total = sum(weights)
-        for p, w in zip(paths, weights):
-            timeline.append((p, max(MIN_PANEL_SECONDS, dur * w / total)))
+def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_path, fps, music, music_volume):
+    """Encode the video. Returns the frame number where each beat starts."""
+    timeline = []  # (panel_path, seconds, beat_index)
+    for b, (beat, dur) in enumerate(zip(beats, durations)):
+        words = json.loads((audio_dir / f"{b:04d}.json").read_text(encoding="utf-8"))
+        for p, secs in panel_cues(beat, words, dur, panel_paths):
+            timeline.append((panel_paths[p], secs, b))
 
-    # Stretch or shrink the timeline so it exactly matches the narration length.
-    audio_len = sum(durations)
-    scale = audio_len / sum(d for _, d in timeline)
+    # Frame where each beat starts; keyframes there let the video be split cleanly later.
+    beat_frames, elapsed = [], 0.0
+    for dur in durations:
+        beat_frames.append(round(elapsed * fps))
+        elapsed += dur
+    keyframes = ",".join(f"{f / fps:.4f}" for f in beat_frames)
+
     cmd = [
         "ffmpeg", "-y", "-v", "error", "-stats",
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(fps), "-i", "-",
@@ -395,13 +473,14 @@ def render_video(beats, panel_paths, durations, narration_wav, out_path, fps, mu
     else:
         cmd += ["-map", "0:v", "-map", "1:a"]
     cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-force_key_frames", keyframes,
             "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out_path)]
 
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     elapsed, frames_written = 0.0, 0
     try:
-        for path, dur in timeline:
-            elapsed += dur * scale
+        for path, secs, _ in timeline:
+            elapsed += secs
             n = round(elapsed * fps) - frames_written
             for data in panel_frames(path, n):
                 proc.stdin.write(data)
@@ -411,6 +490,54 @@ def render_video(beats, panel_paths, durations, narration_wav, out_path, fps, mu
         proc.wait()
     if proc.returncode != 0:
         raise SystemExit("ffmpeg failed while encoding the video")
+    return beat_frames
+
+
+def split_into_parts(video, beat_frames, fps, max_mb):
+    """Cut the finished video at beat boundaries into parts no bigger than max_mb."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "packet=pts_time,size", "-of", "csv=p=0", str(video)],
+        capture_output=True, text=True, check=True,
+    )
+    packets = []
+    for line in out.stdout.split():
+        t, size = line.split(",")[:2]
+        if t != "N/A":
+            packets.append((float(t), int(size)))
+    packets.sort()
+    total_len = probe_duration(video)
+    starts = [f / fps for f in beat_frames] + [total_len]
+
+    # Bytes between consecutive beat starts.
+    beat_bytes, k = [], 0
+    for b in range(len(beat_frames)):
+        size = 0
+        while k < len(packets) and packets[k][0] < starts[b + 1] - 0.5 / fps:
+            size += packets[k][1]
+            k += 1
+        beat_bytes.append(size)
+    beat_bytes[-1] += sum(s for _, s in packets[k:])
+
+    budget = max_mb * 1024 * 1024 * 0.97  # leave room for the container
+    cuts, size = [0], 0
+    for b, nbytes in enumerate(beat_bytes):
+        if size and size + nbytes > budget:
+            cuts.append(b)
+            size = 0
+        size += nbytes
+    cuts.append(len(beat_frames))
+
+    parts = []
+    for n, (a, b) in enumerate(zip(cuts, cuts[1:]), 1):
+        part = video.with_name(f"{video.stem}_part{n}{video.suffix}")
+        cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{(beat_frames[a] + 0.5) / fps:.4f}"]
+        if b < len(beat_frames):
+            cmd += ["-to", f"{beat_frames[b] / fps:.4f}"]
+        cmd += ["-i", str(video), "-c", "copy", "-avoid_negative_ts", "make_zero",
+                "-movflags", "+faststart", str(part)]
+        subprocess.run(cmd, check=True)
+        parts.append(part)
+    return parts
 
 
 # --------------------------------------------------------------------------
@@ -426,6 +553,8 @@ def main():
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--music", type=Path, help="optional background music file, looped")
     ap.add_argument("--music-volume", type=float, default=0.12)
+    ap.add_argument("--max-part-mb", type=float, default=0,
+                    help="also split the video into parts under this size (MB), cutting between beats")
     ap.add_argument("--script-only", action="store_true", help="stop after writing script.json so you can edit it")
     ap.add_argument("--rewrite", action="store_true", help="ignore the cached script and ask Claude again")
     args = ap.parse_args()
@@ -456,6 +585,8 @@ def main():
         print(f"Using existing script: {script_path}")
         beats = json.loads(script_path.read_text(encoding="utf-8"))
     else:
+        if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+            raise SystemExit("ANTHROPIC_API_KEY is not set. See README.md, or put a script.json in the work folder.")
         print("Writing recap script with Claude...")
         beats = write_script(panels, args.series, args.style)
         script_path.write_text(json.dumps(beats, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -481,8 +612,13 @@ def main():
 
     # 4. video
     print(f"Rendering {args.output}...")
-    render_video(beats, panel_paths, durations, narration, args.output, args.fps, args.music, args.music_volume)
+    beat_frames = render_video(beats, panel_paths, durations, audio_dir, narration, args.output,
+                               args.fps, args.music, args.music_volume)
     print(f"Done: {args.output}")
+    if args.max_part_mb and args.output.stat().st_size > args.max_part_mb * 1024 * 1024:
+        for part in split_into_parts(args.output, beat_frames, args.fps, args.max_part_mb):
+            size = part.stat().st_size / 1024 / 1024
+            print(f"  {part.name}: {size:.1f} MB, {probe_duration(part):.0f}s")
 
 
 if __name__ == "__main__":
