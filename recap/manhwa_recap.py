@@ -45,9 +45,7 @@ MAX_PANEL_RATIO = 2.6      # panels taller than width * this are cut into chunks
 # Video
 W, H = 1920, 1080
 FG_MAX_W = 1300            # widest the panel itself may be on screen
-PAN_W = 1000               # on-screen width of tall panels
-CALM_MIN_VIEW = 1.2        # calm mode: shortest time one still view of a tall panel stays up (s)
-CALM_FADE = 0.35           # calm mode: cross-fade between views of a tall panel (s)
+PAN_W = 1000               # on-screen width of tall panels that scroll vertically
 SEGMENT_GAP = 0.35         # seconds of silence after each narrated beat
 MIN_PANEL_SECONDS = 1.5    # no panel is shown for less than this
 
@@ -617,7 +615,7 @@ def build_narration_track(beats, audio_dir, out_wav):
 # 4. Panels + audio -> video
 # --------------------------------------------------------------------------
 
-def prepare_panel(path, motion="calm"):
+def prepare_panel(path):
     """Return (backdrop, foreground) arrays for one panel."""
     img = Image.open(path).convert("RGB")
 
@@ -627,75 +625,38 @@ def prepare_panel(path, motion="calm"):
     bg = bg.crop((left, top, left + W, top + H)).filter(ImageFilter.GaussianBlur(40))
     bg = Image.eval(bg, lambda v: int(v * 0.45))
 
-    # In "scroll" mode panels fit slightly taller than the screen so even normal
-    # panels drift a little. Tall panels are kept at a readable width either way.
-    fit_h = H * 1.06 if motion == "scroll" else H
-    fg_scale = min(FG_MAX_W / img.width, fit_h / img.height)
+    # Fit slightly taller than the screen so even normal panels drift a little;
+    # tall panels are kept at a readable width and pan from top to bottom.
+    fg_scale = min(FG_MAX_W / img.width, H * 1.06 / img.height)
     if img.width * fg_scale < PAN_W:
         fg_scale = PAN_W / img.width
     fg = img.resize((round(img.width * fg_scale), round(img.height * fg_scale)), Image.LANCZOS)
     return np.asarray(bg), np.asarray(fg)
 
 
-def panel_frames(path, n_frames, fps=30, motion="calm"):
-    bg, fg = prepare_panel(path, motion)
+def panel_frames(path, n_frames):
+    bg, fg = prepare_panel(path)
     fh, fw = fg.shape[:2]
     x0 = (W - fw) // 2
-
-    def still(view):
-        frame = bg.copy()
-        vh = view.shape[0]
-        y0 = (H - vh) // 2
-        frame[y0:y0 + vh, x0:x0 + view.shape[1]] = view
-        return frame
-
     if fh <= H:
-        data = still(fg).tobytes()
+        y0 = (H - fh) // 2
+        frame = bg.copy()
+        frame[y0:y0 + fh, x0:x0 + fw] = fg
+        data = frame.tobytes()
         for _ in range(n_frames):
             yield data
         return
     travel = fh - H
-
-    if motion == "scroll":
-        for f in range(n_frames):
-            t = f / max(n_frames - 1, 1)
-            t = t * t * (3 - 2 * t)  # ease in/out
-            y = round(travel * t)
-            frame = bg.copy()
-            frame[:, x0:x0 + fw] = fg[y:y + H]
-            yield frame.tobytes()
-        return
-
-    # Calm: no scrolling. Show the tall panel as a few still, overlapping
-    # screen-sized views, top to bottom, with a soft cross-fade between them.
-    chunks = -(-fh // H)
-    while chunks > 1 and n_frames / chunks < CALM_MIN_VIEW * fps:
-        chunks -= 1
-    if chunks == 1:
-        # Too little time for several views: show the whole panel, shrunk to fit.
-        scale = H / fh
-        small = np.asarray(Image.fromarray(fg).resize((max(1, round(fw * scale)), H), Image.LANCZOS))
-        x0 = (W - small.shape[1]) // 2
-        data = still(small).tobytes()
-        for _ in range(n_frames):
-            yield data
-        return
-    views = [still(fg[round(travel * i / (chunks - 1)):][:H]) for i in range(chunks)]
-    fade = min(round(CALM_FADE * fps), n_frames // (chunks * 3))
-    per = n_frames / chunks
     for f in range(n_frames):
-        i = min(int(f / per), chunks - 1)
-        until_next = round((i + 1) * per) - f
-        if i < chunks - 1 and fade > 0 and until_next <= fade:
-            a = 1 - until_next / (fade + 1)
-            frame = (views[i] * (1 - a) + views[i + 1] * a).astype(np.uint8)
-            yield frame.tobytes()
-        else:
-            yield views[i].tobytes()
+        t = f / max(n_frames - 1, 1)
+        t = t * t * (3 - 2 * t)  # ease in/out
+        y = round(travel * t)
+        frame = bg.copy()
+        frame[:, x0:x0 + fw] = fg[y:y + H]
+        yield frame.tobytes()
 
 
-def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_path, fps, music, music_volume,
-                 motion="calm"):
+def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_path, fps, music, music_volume):
     """Encode the video. Returns the frame number where each beat starts."""
     timeline = []  # (panel_path, seconds, beat_index)
     for b, (beat, dur) in enumerate(zip(beats, durations)):
@@ -732,7 +693,7 @@ def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_pa
         for path, secs, _ in timeline:
             elapsed += secs
             n = round(elapsed * fps) - frames_written
-            for data in panel_frames(path, n, fps, motion):
+            for data in panel_frames(path, n):
                 proc.stdin.write(data)
             frames_written += n
     finally:
@@ -804,9 +765,6 @@ def main():
     ap.add_argument("--voice", default="en-US-AndrewNeural", help="edge-tts voice (list with: edge-tts --list-voices)")
     ap.add_argument("--rate", default="+8%", help="speech speed, e.g. +0%%, +15%%")
     ap.add_argument("--fps", type=int, default=30)
-    ap.add_argument("--motion", choices=["calm", "scroll"], default="calm",
-                    help="calm: no scrolling, tall panels shown as still views with soft fades "
-                         "(easier on viewers prone to motion sickness). scroll: the old top-to-bottom pan")
     ap.add_argument("--music", type=Path, help="optional background music file, looped")
     ap.add_argument("--music-volume", type=float, default=0.12)
     ap.add_argument("--max-part-mb", type=float, default=0,
@@ -899,7 +857,7 @@ def main():
     # 4. video
     print(f"Rendering {args.output}...")
     beat_frames = render_video(beats, video_paths, durations, audio_dir, narration, args.output,
-                               args.fps, args.music, args.music_volume, args.motion)
+                               args.fps, args.music, args.music_volume)
     print(f"Done: {args.output}")
     if args.max_part_mb and args.output.stat().st_size > args.max_part_mb * 1024 * 1024:
         for part in split_into_parts(args.output, beat_frames, args.fps, args.max_part_mb):
