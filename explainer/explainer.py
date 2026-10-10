@@ -394,12 +394,6 @@ def key(name):
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
-def loose_key(name):
-    """Name for matching: lowercase letters only, ignoring copy suffixes like "(1)" or "_2"."""
-    name = re.sub(r"[\s_-]*(\(\d+\)|copy|\d+)$", "", name.strip().lower())
-    return re.sub(r"[^a-z]", "", name)
-
-
 def find_asset(folder, name):
     if not folder.is_dir():
         return None
@@ -408,44 +402,7 @@ def find_asset(folder, name):
     for p in files:
         if key(p.stem) == want:
             return p
-    for p in files:  # forgiving: "Campfire (1).png", "campfire_2.png", "Camp Fire.png"
-        if loose_key(p.stem) == loose_key(name):
-            return p
     return None
-
-
-def diagnose_library(lib, missing):
-    """Explain why images weren't found: unmatched files, wrong folders, near-miss names."""
-    import difflib
-
-    lines = []
-    if not lib.is_dir():
-        return [f"The library folder doesn't exist: {lib.resolve()}",
-                "Put your images in the 'library' folder next to explainer.py (or pass --library <folder>)."]
-    for sub in ("characters", "backgrounds", "items"):
-        if not (lib / sub).is_dir():
-            lines.append(f"Missing folder: {(lib / sub).resolve()}")
-    loose = [p for p in (lib / "characters").iterdir() if p.suffix.lower() in IMAGE_EXTS] \
-        if (lib / "characters").is_dir() else []
-    if loose:
-        lines.append(f"{len(loose)} images are loose in characters/ (e.g. {loose[0].name}). Poses must be inside a "
-                     "folder named after the character, e.g. characters/caveman/idle.png")
-    for m in sorted(missing):
-        folder = (lib / m).parent
-        want = Path(m).stem
-        if not folder.is_dir():
-            others = [p.name for p in folder.parent.iterdir() if p.is_dir()] if folder.parent.is_dir() else []
-            close = difflib.get_close_matches(folder.name, others, n=1, cutoff=0.4)
-            hint = f" Did you mean to name your folder '{folder.name}'? You have '{close[0]}'." if close else ""
-            lines.append(f"No folder {folder.relative_to(lib)}/ for {m}.{hint}")
-            continue
-        names = [p.stem for p in folder.iterdir() if p.suffix.lower() in IMAGE_EXTS]
-        close = difflib.get_close_matches(want, names, n=1, cutoff=0.5)
-        if close:
-            lines.append(f"{m}: not found, but there's '{close[0]}' - rename it to '{want}'")
-        else:
-            lines.append(f"{m}: not found (that folder has: {', '.join(sorted(names)[:8]) or 'nothing'})")
-    return lines
 
 
 def remove_flat_background(img):
@@ -923,12 +880,10 @@ def cmd_render(args):
     info.write_text(youtube_text(plan, durs), encoding="utf-8")
     print(f"Done: {out}\n      {thumb}\n      {info}")
     if lib.missing:
-        print(f"\nPlaceholders were used for {len(lib.missing)} images that weren't found in "
-              f"{args.library.resolve()}:")
-        for line in diagnose_library(args.library, lib.missing)[:40]:
-            print(f"  - {line}")
-        print("Fix the names or folders above and render again. For prompts for missing art, run:\n"
-              f"  python explainer.py checklist {args.plan}")
+        print(f"\nPlaceholders were used for {len(lib.missing)} missing images, e.g.:")
+        for m in sorted(lib.missing)[:15]:
+            print(f"  {args.library}/{m}")
+        print("Run  python explainer.py checklist " + str(args.plan) + "  for prompts for all of them.")
 
 
 def cmd_checklist(args):
