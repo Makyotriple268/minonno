@@ -47,6 +47,7 @@ W, H = 1920, 1080
 FG_MAX_W = 1300            # widest the panel itself may be on screen
 PAN_W = 1000               # on-screen width of tall panels that scroll vertically
 SEGMENT_GAP = 0.35         # seconds of silence after each narrated beat
+MIN_PANEL_SECONDS = 1.5    # no panel is shown for less than this
 
 MODEL = "claude-opus-5-5"
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -181,6 +182,10 @@ ascending order, and markers sit only between words, never inside one. Give \
 each panel at least a few words so it stays on screen long enough to see; \
 for a quick run of action panels, place the markers a few words apart rather \
 than side by side.
+
+Pacing: write about 12 to 20 words of narration per panel on average, so a \
+chapter of 80 panels becomes roughly 4 to 5 minutes of voiceover. Don't \
+compress a chapter into a quick summary; retell every scene.
 
 Also return updated notes: a short running summary of the story so far plus \
 the characters and their names. These notes are handed back to you with the \
@@ -328,16 +333,27 @@ def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_
 
         label = f"panels {batch[0][0]}-{batch[-1][0]}"
         print(f"  {llm.title()}: {label} of {len(panels)}...", flush=True)
-        if llm == "gemini":
+
+        def ask(items):
+            if llm != "gemini":
+                return ask_claude(system, items, label)
             try:
-                result = ask_gemini(system, items, label, gemini_model)
+                return ask_gemini(system, items, label, gemini_model)
             except GeminiFailed as e:
                 if fallback != "claude":
                     raise SystemExit(f"{e}. Run again later, or add --fallback claude.")
                 print(f"  {e}. Falling back to Claude for {label}...", flush=True)
-                result = ask_claude(system, items, label)
-        else:
-            result = ask_claude(system, items, label)
+                return ask_claude(system, items, label)
+
+        result = ask(items)
+        # Some models (especially lighter ones, or with many panels at once) write a
+        # one-minute summary instead of a recap. Ask once more if it's far too short.
+        words = sum(len(MARKER.sub("", b.get("narration", "")).split()) for b in result.get("beats", []))
+        if words < 6 * len(batch):
+            print(f"    Script too short ({words} words for {len(batch)} panels), asking again...", flush=True)
+            result = ask(items + [("text", f"IMPORTANT: a previous attempt was far too short ({words} words "
+                                           f"for {len(batch)} panels). Retell every scene in full, about "
+                                           "15 words per panel.")])
 
         valid = {idx for idx, _, _ in batch}
         for beat in result["beats"]:
@@ -407,6 +423,25 @@ async def tts_all(beats, audio_dir, voice, rate):
     await asyncio.gather(*(one(i, b) for i, b in enumerate(beats)))
 
 
+def with_min_time(cues, total, minimum):
+    """Stretch panels shorter than `minimum`, taking the time from the longer ones."""
+    durs = [d for _, d in cues]
+    if len(durs) * minimum > total:
+        minimum = total / len(durs)
+    for _ in range(len(durs)):
+        short = [i for i, d in enumerate(durs) if d < minimum - 1e-6]
+        if not short:
+            break
+        for i in short:
+            durs[i] = minimum
+        long_ = [i for i, d in enumerate(durs) if d > minimum + 1e-6]
+        excess = sum(durs) - total
+        room = sum(durs[i] - minimum for i in long_)
+        for i in long_:
+            durs[i] -= excess * (durs[i] - minimum) / room if room > 0 else 0
+    return [(p, d) for (p, _), d in zip(cues, durs)]
+
+
 def panel_cues(beat, words, duration, panel_paths):
     """Return [(panel, seconds_on_screen)] for one beat, switching on the marked words.
 
@@ -419,7 +454,8 @@ def panel_cues(beat, words, duration, panel_paths):
         for p in beat["panels"]:
             with Image.open(panel_paths[p]) as im:
                 weights.append(max(1.0, min(2.5, im.height / im.width)))
-        return [(p, duration * w / sum(weights)) for p, w in zip(beat["panels"], weights)]
+        cues = [(p, duration * w / sum(weights)) for p, w in zip(beat["panels"], weights)]
+        return with_min_time(cues, duration, MIN_PANEL_SECONDS)
 
     # Find where each spoken word sits in the text, then each marker's word.
     positions, cursor = [], 0
@@ -446,17 +482,23 @@ def panel_cues(beat, words, duration, panel_paths):
         for k in range(i, j + 1):
             times[k] = times[i] + span * (k - i)
         i = j + 1
-    return [(p, times[k + 1] - times[k]) for k, (p, _) in enumerate(markers)]
+    cues = [(p, times[k + 1] - times[k]) for k, (p, _) in enumerate(markers)]
+    return with_min_time(cues, duration, MIN_PANEL_SECONDS)
 
 
 def build_narration_track(beats, audio_dir, out_wav):
-    """Pad each clip with a short pause, join into one WAV. Returns per-beat durations."""
+    """Pad each clip with a short pause, join into one WAV. Returns per-beat durations.
+
+    A beat whose narration is too short for its panels gets a longer pause, so
+    every panel stays on screen at least MIN_PANEL_SECONDS instead of flashing by.
+    """
     durations, padded = [], []
-    for i in range(len(beats)):
+    for i, beat in enumerate(beats):
         src = audio_dir / f"{i:04d}.mp3"
         dst = audio_dir / f"{i:04d}.wav"
+        total = max(probe_duration(src) + SEGMENT_GAP, len(beat["panels"]) * MIN_PANEL_SECONDS)
         subprocess.run(
-            ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-af", f"apad=pad_dur={SEGMENT_GAP}",
+            ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-af", f"apad=whole_dur={total:.3f}",
              "-ar", "44100", "-ac", "2", str(dst)],
             check=True,
         )
