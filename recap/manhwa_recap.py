@@ -264,17 +264,30 @@ def ask_gemini(system, items, label, model):
                                                   mime_type="image/jpeg"))
     # The client reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment. Keep a
     # reference to it: a client that gets garbage-collected closes its connection mid-call.
+    import time
+    from google.genai import errors
+
     client = genai.Client()
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            response_mime_type="application/json",
-            response_json_schema=SCRIPT_SCHEMA,
-            max_output_tokens=32000,
-        ),
-    )
+    for attempt in range(6):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    response_json_schema=SCRIPT_SCHEMA,
+                    max_output_tokens=32000,
+                ),
+            )
+            break
+        except errors.APIError as e:
+            # 429 = free-tier rate limit, 5xx = Gemini busy. Wait and retry.
+            if e.code not in (429, 500, 503) or attempt == 5:
+                raise SystemExit(f"Gemini error for {label}: {e}")
+            wait = 60 * (attempt + 1)
+            print(f"    Gemini limit reached ({e.code}), waiting {wait}s...", flush=True)
+            time.sleep(wait)
     if not response.text:
         reason = response.candidates[0].finish_reason if response.candidates else response.prompt_feedback
         raise SystemExit(
@@ -284,13 +297,15 @@ def ask_gemini(system, items, label, model):
     return json.loads(response.text)
 
 
-def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_MODEL):
-    """panels: list of (global_index, path, chapter_label). Returns list of beats."""
+def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_MODEL, notes=""):
+    """panels: list of (global_index, path, chapter_label).
+
+    notes: story-so-far from earlier chapters. Returns (beats, updated notes).
+    """
     system = SYSTEM_PROMPT
     if extra_style:
         system += f"\n\nExtra style instructions from the channel owner: {extra_style}"
 
-    notes = ""
     beats = []
     for start in range(0, len(panels), PANELS_PER_REQUEST):
         batch = panels[start:start + PANELS_PER_REQUEST]
@@ -324,7 +339,7 @@ def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_
             if beat["panels"] and beat["narration"].strip():
                 beats.append(beat)
         notes = result["notes"]
-    return beats
+    return beats, notes
 
 
 # --------------------------------------------------------------------------
@@ -606,6 +621,8 @@ def main():
     ap.add_argument("--max-part-mb", type=float, default=0,
                     help="also split the video into parts under this size (MB), cutting between beats")
     ap.add_argument("--script-only", action="store_true", help="stop after writing script.json so you can edit it")
+    ap.add_argument("--notes-file", type=Path,
+                    help="story-so-far file: read before writing the script, then updated for the next chapter")
     ap.add_argument("--rewrite", action="store_true", help="ignore the cached script and ask Claude again")
     args = ap.parse_args()
 
@@ -641,8 +658,15 @@ def main():
         elif not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
             raise SystemExit("ANTHROPIC_API_KEY is not set. See README.md, or put a script.json in the work folder.")
         print(f"Writing recap script with {args.llm.title()}...")
-        beats = write_script(panels, args.series, args.style, args.llm, args.gemini_model)
+        notes = ""
+        if args.notes_file and args.notes_file.exists():
+            notes = args.notes_file.read_text(encoding="utf-8").strip()
+            print(f"  Continuing from story notes in {args.notes_file}")
+        beats, notes = write_script(panels, args.series, args.style, args.llm, args.gemini_model, notes)
         script_path.write_text(json.dumps(beats, indent=2, ensure_ascii=False), encoding="utf-8")
+        (work / "notes.txt").write_text(notes, encoding="utf-8")
+        if args.notes_file:  # hand the updated story-so-far to the next chapter
+            args.notes_file.write_text(notes, encoding="utf-8")
         shutil.rmtree(work / "audio", ignore_errors=True)
         print(f"Saved {len(beats)} beats to {script_path}")
     if args.script_only:
