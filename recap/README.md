@@ -55,6 +55,7 @@ This writes `recap_work/script.json`. Each beat's narration has markers like `[1
 | `--music bg.mp3` | Background music, looped under the voice |
 | `--music-volume 0.12` | Music loudness (0-1) |
 | `--fps 30` | Frame rate |
+| `--keep-text` | Show panels as they are. By default, speech bubbles and white caption boxes are painted out of the video, and panels that are only text are skipped (the script is still written from the original panels) |
 | `--max-part-mb 29` | Also split the finished video into parts under this size, cutting only between sentences. Handy for apps with upload limits |
 
 ## Notes

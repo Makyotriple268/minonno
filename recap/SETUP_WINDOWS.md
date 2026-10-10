@@ -56,6 +56,10 @@ Double-click **`run_all.bat`**. It goes through Chapter 21 to 81 one by one and 
 - **If Gemini's free limit runs out,** it waits and retries. If the daily limit is used up, it switches to Claude if you saved an Anthropic key (step 6). Otherwise it stops; run it again the next day.
 - **To change the range,** open `run_all.bat` in Notepad and edit `FIRST` and `LAST`. To do another series, also change `SERIES`, and replace `story_so_far.txt` with an empty file.
 
+## Updating
+
+When you download a newer version from GitHub, replace `manhwa_recap.py` and `run_all.bat`, keep your own `story_so_far.txt`, `chapters` and `videos`, and run `pip install -r requirements.txt` once more in case new packages were added.
+
 ## Uploading to YouTube
 
 Each chapter is a full 1080p video. To make one long video, put them in order in CapCut and export.

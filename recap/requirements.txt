@@ -3,3 +3,4 @@ google-genai>=1.0
 edge-tts>=7.0
 pillow>=10.0
 numpy>=1.26
+opencv-python-headless>=4.8

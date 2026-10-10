@@ -155,6 +155,103 @@ def extract_panels(cbz_path, out_dir):
 
 
 # --------------------------------------------------------------------------
+# 1b. Text removal for the video (the script is still written from the originals)
+# --------------------------------------------------------------------------
+
+def find_bubbles(rgb):
+    """Mask of speech bubbles and white caption boxes: white, convex shapes with dark text inside."""
+    import cv2
+
+    h, w = rgb.shape[:2]
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    white = ((hsv[..., 2] > 215) & (hsv[..., 1] < 45)).astype(np.uint8)
+    white = cv2.morphologyEx(white, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    dark = (hsv[..., 2] < 110) & (hsv[..., 1] < 90)  # black lettering, not coloured title art
+    contours, _ = cv2.findContours(white, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    mask = np.zeros((h, w), np.uint8)
+    for c in contours:
+        area = cv2.contourArea(c)  # includes the text "holes" inside the bubble
+        if not (0.003 * h * w < area < 0.6 * h * w):
+            continue
+        hull = cv2.contourArea(cv2.convexHull(c))
+        if hull == 0 or area / hull < 0.85:  # bubbles are round or boxy, backgrounds aren't
+            continue
+        shape = np.zeros((h, w), np.uint8)
+        cv2.drawContours(shape, [c], -1, 1, thickness=cv2.FILLED)
+        inside = shape.astype(bool)
+        white_frac = white[inside].mean()
+        dark_frac = dark[inside].mean()
+        if 0.5 < white_frac < 0.985 and dark_frac > 0.015:  # mostly white, with lettering
+            mask |= shape
+    return mask
+
+
+def clean_panel(src, dst):
+    """Paint over speech bubbles. Returns False if the panel is basically all text."""
+    import cv2
+
+    rgb = np.asarray(Image.open(src).convert("RGB"))
+    h, w = rgb.shape[:2]
+    mask = find_bubbles(rgb)
+    if mask.any():
+        mask = cv2.dilate(mask, np.ones((9, 9), np.uint8))  # take the bubble outline and tail base too
+        if mask.mean() > 0.6:
+            return False
+        out = rgb.copy()
+        n, labels = cv2.connectedComponents(mask)
+        flat_fill = np.zeros((h, w), np.uint8)
+        for i in range(1, n):
+            region = (labels == i).astype(np.uint8)
+            if region.mean() > 0.35:  # a narration box filling the panel: nothing to show
+                return False
+            ring = cv2.dilate(region, np.ones((15, 15), np.uint8)).astype(bool) & ~region.astype(bool)
+            around = rgb[ring]
+            near_white = (around.min(axis=1) > 215).mean() if len(around) else 0
+            # Bubbles in the white margin get plain white; on a flat colour, that colour.
+            # Only bubbles over actual artwork are inpainted.
+            if near_white > 0.5:
+                # Mostly in the white margin: white where the surroundings are white,
+                # and fill in from the artwork where the bubble overlaps it.
+                inside = region.astype(bool)
+                painted = cv2.inpaint(rgb, region, 9, cv2.INPAINT_TELEA)
+                bright = painted.min(axis=2) > 200
+                out[inside & bright] = 255
+                out[inside & ~bright] = painted[inside & ~bright]
+            elif len(around) and around.std(axis=0).mean() < 18:
+                out[region.astype(bool)] = np.median(around, axis=0)
+            else:
+                flat_fill |= region
+        if flat_fill.any():
+            out = cv2.inpaint(out, flat_fill, 7, cv2.INPAINT_TELEA)
+        rgb = out
+        # Trim the now-empty white margins at the top and bottom.
+        rows = np.where((rgb.min(axis=2) < 225).mean(axis=1) > 0.02)[0]
+        if len(rows) and rows[-1] - rows[0] > 0.4 * h:
+            rgb = rgb[max(0, rows[0] - 4): rows[-1] + 5]
+    # Nothing left but a flat colour (a text-only panel)?
+    gray = rgb.mean(axis=2)
+    if gray.std() < 14 or (np.abs(gray - np.median(gray)) < 12).mean() > 0.93:
+        return False
+    Image.fromarray(rgb).save(dst, quality=92)
+    return True
+
+
+def clean_panels(panel_paths, out_dir):
+    """Text-free copies for the video. Text-only panels map to the previous clean panel."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    result, last_good, removed = [], None, 0
+    for p in panel_paths:
+        dst = out_dir / f"{p.parent.name}_{p.name}"
+        ok = dst.exists() or clean_panel(p, dst)
+        if ok:
+            last_good = dst
+        else:
+            removed += 1
+        result.append(last_good or p)
+    return result, removed
+
+
+# --------------------------------------------------------------------------
 # 2. Panels -> recap script (Claude)
 # --------------------------------------------------------------------------
 
@@ -673,6 +770,8 @@ def main():
     ap.add_argument("--max-part-mb", type=float, default=0,
                     help="also split the video into parts under this size (MB), cutting between beats")
     ap.add_argument("--script-only", action="store_true", help="stop after writing script.json so you can edit it")
+    ap.add_argument("--keep-text", action="store_true",
+                    help="show panels as they are, with speech bubbles (default: bubbles are removed)")
     ap.add_argument("--fallback", choices=["claude"],
                     help="if Gemini fails (e.g. daily limit used up), write that part with Claude instead")
     ap.add_argument("--notes-file", type=Path,
@@ -699,6 +798,16 @@ def main():
         print(f"  {cbz.name}: {len(paths)} panels")
         panels += [(len(panels) + i, p, cbz.stem) for i, p in enumerate(paths)]
     panel_paths = [p for _, p, _ in panels]
+    video_paths = panel_paths
+    if not args.keep_text:
+        try:
+            import cv2  # noqa: F401
+        except ImportError:
+            raise SystemExit("Text removal needs OpenCV: run  pip install opencv-python-headless  "
+                             "(or add --keep-text to leave speech bubbles in).")
+        print("Removing speech bubbles for the video...")
+        video_paths, removed = clean_panels(panel_paths, work / "clean")
+        print(f"  {removed} text-only panels will be skipped")
 
     # 2. script
     script_path = work / "script.json"
@@ -747,7 +856,7 @@ def main():
 
     # 4. video
     print(f"Rendering {args.output}...")
-    beat_frames = render_video(beats, panel_paths, durations, audio_dir, narration, args.output,
+    beat_frames = render_video(beats, video_paths, durations, audio_dir, narration, args.output,
                                args.fps, args.music, args.music_volume)
     print(f"Done: {args.output}")
     if args.max_part_mb and args.output.stat().st_size > args.max_part_mb * 1024 * 1024:
