@@ -32,7 +32,7 @@ if not exist "chapters\Chapter %1.cbz" (
 )
 echo.
 echo ===== Chapter %1 =====
-python manhwa_recap.py "chapters\Chapter %1.cbz" -o "videos\Chapter %1.mp4" --llm gemini --series "%SERIES%" --notes-file story_so_far.txt
+python manhwa_recap.py "chapters\Chapter %1.cbz" -o "videos\Chapter %1.mp4" --llm gemini --series "%SERIES%" --notes-file story_so_far.txt --fallback claude
 if errorlevel 1 (
   echo.
   echo Chapter %1 failed. Fix the problem above, or just wait if Gemini's daily limit ran out,

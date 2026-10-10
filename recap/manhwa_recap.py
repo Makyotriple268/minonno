@@ -251,6 +251,10 @@ def ask_claude(system, items, label):
     return json.loads("".join(b.text for b in message.content if b.type == "text"))
 
 
+class GeminiFailed(Exception):
+    """Gemini couldn't produce this batch (quota used up, refusal, or repeated errors)."""
+
+
 def ask_gemini(system, items, label, model):
     from google import genai
     from google.genai import types
@@ -282,22 +286,22 @@ def ask_gemini(system, items, label, model):
             )
             break
         except errors.APIError as e:
-            # 429 = free-tier rate limit, 5xx = Gemini busy. Wait and retry.
-            if e.code not in (429, 500, 503) or attempt == 5:
-                raise SystemExit(f"Gemini error for {label}: {e}")
+            # 429 = free-tier rate limit, 5xx = Gemini busy. Wait and retry, except when
+            # the daily quota is gone: waiting minutes won't help, so fail fast.
+            daily = e.code == 429 and "PerDay" in str(e)
+            if e.code not in (429, 500, 503) or daily or attempt == 5:
+                reason = "daily free limit used up" if daily else str(e)
+                raise GeminiFailed(f"Gemini error for {label}: {reason}")
             wait = 60 * (attempt + 1)
             print(f"    Gemini limit reached ({e.code}), waiting {wait}s...", flush=True)
             time.sleep(wait)
     if not response.text:
         reason = response.candidates[0].finish_reason if response.candidates else response.prompt_feedback
-        raise SystemExit(
-            f"Gemini returned nothing for {label} ({reason}). "
-            "Remove the offending pages from the CBZ or write those beats by hand in script.json."
-        )
+        raise GeminiFailed(f"Gemini returned nothing for {label} ({reason})")
     return json.loads(response.text)
 
 
-def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_MODEL, notes=""):
+def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_MODEL, notes="", fallback=None):
     """panels: list of (global_index, path, chapter_label).
 
     notes: story-so-far from earlier chapters. Returns (beats, updated notes).
@@ -325,7 +329,13 @@ def write_script(panels, series, extra_style, llm="claude", gemini_model=GEMINI_
         label = f"panels {batch[0][0]}-{batch[-1][0]}"
         print(f"  {llm.title()}: {label} of {len(panels)}...", flush=True)
         if llm == "gemini":
-            result = ask_gemini(system, items, label, gemini_model)
+            try:
+                result = ask_gemini(system, items, label, gemini_model)
+            except GeminiFailed as e:
+                if fallback != "claude":
+                    raise SystemExit(f"{e}. Run again later, or add --fallback claude.")
+                print(f"  {e}. Falling back to Claude for {label}...", flush=True)
+                result = ask_claude(system, items, label)
         else:
             result = ask_claude(system, items, label)
 
@@ -621,6 +631,8 @@ def main():
     ap.add_argument("--max-part-mb", type=float, default=0,
                     help="also split the video into parts under this size (MB), cutting between beats")
     ap.add_argument("--script-only", action="store_true", help="stop after writing script.json so you can edit it")
+    ap.add_argument("--fallback", choices=["claude"],
+                    help="if Gemini fails (e.g. daily limit used up), write that part with Claude instead")
     ap.add_argument("--notes-file", type=Path,
                     help="story-so-far file: read before writing the script, then updated for the next chapter")
     ap.add_argument("--rewrite", action="store_true", help="ignore the cached script and ask Claude again")
@@ -652,17 +664,21 @@ def main():
         print(f"Using existing script: {script_path}")
         beats = json.loads(script_path.read_text(encoding="utf-8"))
     else:
-        if args.llm == "gemini":
-            if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
-                raise SystemExit("GEMINI_API_KEY is not set. See README.md, or put a script.json in the work folder.")
-        elif not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+        has_gemini = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+        has_claude = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+        fallback = args.fallback if has_claude else None
+        if args.fallback and not has_claude:
+            print("  Note: --fallback claude ignored because ANTHROPIC_API_KEY is not set.")
+        if args.llm == "gemini" and not has_gemini:
+            raise SystemExit("GEMINI_API_KEY is not set. See README.md, or put a script.json in the work folder.")
+        if args.llm == "claude" and not has_claude:
             raise SystemExit("ANTHROPIC_API_KEY is not set. See README.md, or put a script.json in the work folder.")
         print(f"Writing recap script with {args.llm.title()}...")
         notes = ""
         if args.notes_file and args.notes_file.exists():
             notes = args.notes_file.read_text(encoding="utf-8").strip()
             print(f"  Continuing from story notes in {args.notes_file}")
-        beats, notes = write_script(panels, args.series, args.style, args.llm, args.gemini_model, notes)
+        beats, notes = write_script(panels, args.series, args.style, args.llm, args.gemini_model, notes, fallback)
         script_path.write_text(json.dumps(beats, indent=2, ensure_ascii=False), encoding="utf-8")
         (work / "notes.txt").write_text(notes, encoding="utf-8")
         if args.notes_file:  # hand the updated story-so-far to the next chapter

@@ -25,6 +25,12 @@ Everything here is free: Gemini's free tier writes the scripts, the Microsoft "A
    ```
    Close the window afterwards; the key only works in new windows.
 
+6. **Optional: Claude as a backup.** If you also have an Anthropic API key (from https://console.anthropic.com), save it too:
+   ```
+   setx ANTHROPIC_API_KEY "paste-your-anthropic-key-here"
+   ```
+   Then when Gemini's free daily limit runs out, Claude writes the rest of the scripts instead of the run stopping. Claude is paid per use; I'd guess very roughly $0.30-1 per chapter, so check your Anthropic console. Without this key, the run simply stops at the limit as before.
+
 ## Add your chapters
 
 Open your Google Drive folder, select the chapters you want (for example Chapter 21 to Chapter 40), and click **Download**. Drive gives you a zip; unzip it and put the `.cbz` files in a folder called `chapters` inside the `recap` folder:
@@ -47,7 +53,7 @@ Double-click **`run_all.bat`**. It goes through Chapter 21 to 81 one by one and 
 
 - **It remembers the story.** `story_so_far.txt` starts with everything up to Chapter 20 and is updated after every chapter, so names and plot stay consistent.
 - **Safe to stop and restart.** Close the window any time. Next time, finished chapters are skipped.
-- **If Gemini's free limit runs out,** it waits and retries. If the daily limit is used up, it stops; run it again the next day.
+- **If Gemini's free limit runs out,** it waits and retries. If the daily limit is used up, it switches to Claude if you saved an Anthropic key (step 6). Otherwise it stops; run it again the next day.
 - **To change the range,** open `run_all.bat` in Notepad and edit `FIRST` and `LAST`. To do another series, also change `SERIES`, and replace `story_so_far.txt` with an empty file.
 
 ## Uploading to YouTube
