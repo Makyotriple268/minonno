@@ -5,7 +5,7 @@ Turns manhwa chapters (`.cbz`) into narrated 16:9 recap videos for YouTube.
 1. Cuts the long webtoon strips into separate panels.
 2. Claude reads the panels in order and writes recap narration.
 3. edge-tts (free Microsoft voices) voices the narration first, recording when every word is spoken.
-4. The video is then built to match the voice: each panel appears on the exact word marked for it in the script, over a blurred backdrop, with tall panels scrolling top to bottom. Saved as a 1080p MP4.
+4. The video is then built to match the voice: each panel appears on the exact word marked for it in the script, over a blurred backdrop. Neighbouring panels often share the screen side by side, sliding in gently. Tall panels scroll top to bottom only when there's time to do it slowly; otherwise they're shown as a few still views with soft fades, so nothing whips past. Saved as a 1080p MP4.
 
 ## Setup (once)
 
@@ -55,6 +55,7 @@ This writes `recap_work/script.json`. Each beat's narration has markers like `[1
 | `--music bg.mp3` | Background music, looped under the voice |
 | `--music-volume 0.12` | Music loudness (0-1) |
 | `--fps 30` | Frame rate |
+| `--layout classic` | The old look: one panel at a time, tall panels always scroll (can be fast). Default is `mixed` |
 | `--keep-text` | Show panels as they are. By default, speech bubbles and white caption boxes are painted out of the video, and panels that are only text are skipped (the script is still written from the original panels) |
 | `--max-part-mb 29` | Also split the finished video into parts under this size, cutting only between sentences. Handy for apps with upload limits |
 

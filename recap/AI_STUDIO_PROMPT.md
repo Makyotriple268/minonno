@@ -50,7 +50,9 @@ For each panel, for its time on screen:
 - **Backdrop:** the same panel scaled to cover 1920×1080, Gaussian blur of 40 px, darkened to 45% brightness.
 - **Foreground:** scale = min(1300 / width, 1145 / height). If that makes the panel narrower than 1000 px, use scale = 1000 / width instead (tall panels stay readable).
 - If the foreground is taller than 1080, pan it from top to bottom over the panel's time with smoothstep easing (t·t·(3−2t)). Otherwise centre it. Because it's scaled to 106% of the screen height, normal panels drift slightly too.
-- Hard cuts between panels.
+- Scroll speed limit: if panning would move faster than 200 px per second, don't scroll (fast motion makes some viewers feel sick). Instead show the tall panel as a few still, overlapping screen-sized views from top to bottom, each at least 1.2 s, with a 0.35 s cross-fade between them; if there isn't time for two views, shrink the whole panel to the screen height and show it still.
+- Side-by-side pairs: when two neighbouring panels are in the same beat, each is on screen at least 1 s, and both have height/width between 0.75 and 2.2, show them side by side. Each fits an 840×960 slot, the slots are 80 px apart and centred on the screen, over the first panel's backdrop, with a soft drop shadow. The first panel fades and slides in (60 px, 0.35 s, ease-out) into the left slot; on the second panel's cue it fades and slides into the right slot while the first stays.
+- Hard cuts between other panels.
 
 Encode with WebCodecs (VideoEncoder H.264 + AudioEncoder AAC) and the mp4-muxer library, so it renders faster than real time to an MP4. Fall back to MediaRecorder (WebM) only if WebCodecs isn't available. Keep the video and audio lengths exactly equal: add up the frame counts from the cumulative times, never per panel, or rounding drifts.
 

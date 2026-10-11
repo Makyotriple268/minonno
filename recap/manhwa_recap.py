@@ -48,6 +48,13 @@ FG_MAX_W = 1300            # widest the panel itself may be on screen
 PAN_W = 1000               # on-screen width of tall panels that scroll vertically
 SEGMENT_GAP = 0.35         # seconds of silence after each narrated beat
 MIN_PANEL_SECONDS = 1.5    # no panel is shown for less than this
+MAX_SCROLL_SPEED = 200     # px/s; tall panels that would scroll faster are shown as still views
+STILL_VIEW_MIN = 1.2       # shortest time one still view of a tall panel stays up (s)
+VIEW_FADE = 0.35           # cross-fade between still views of a tall panel (s)
+PAIR_SLOT_W, PAIR_SLOT_H, PAIR_GAP = 840, 960, 80  # two panels side by side
+PAIR_MIN_RATIO, PAIR_MAX_RATIO = 0.75, 2.2  # height/width range of panels that can be paired
+ENTER_SECONDS = 0.35       # paired panels fade and slide in this quickly
+ENTER_SHIFT = 60           # ...from this many pixels to the side
 
 MODEL = "claude-opus-5-5"
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -615,48 +622,149 @@ def build_narration_track(beats, audio_dir, out_wav):
 # 4. Panels + audio -> video
 # --------------------------------------------------------------------------
 
-def prepare_panel(path):
-    """Return (backdrop, foreground) arrays for one panel."""
-    img = Image.open(path).convert("RGB")
-
+def backdrop(img):
+    """The panel scaled to cover the screen, blurred and darkened."""
     bg_scale = max(W / img.width, H / img.height)
     bg = img.resize((round(img.width * bg_scale) + 1, round(img.height * bg_scale) + 1))
     left, top = (bg.width - W) // 2, (bg.height - H) // 2
     bg = bg.crop((left, top, left + W, top + H)).filter(ImageFilter.GaussianBlur(40))
-    bg = Image.eval(bg, lambda v: int(v * 0.45))
+    return Image.eval(bg, lambda v: int(v * 0.45))
 
+
+def prepare_panel(path):
+    """Return (backdrop, foreground) arrays for one panel."""
+    img = Image.open(path).convert("RGB")
     # Fit slightly taller than the screen so even normal panels drift a little;
-    # tall panels are kept at a readable width and pan from top to bottom.
+    # tall panels are kept at a readable width.
     fg_scale = min(FG_MAX_W / img.width, H * 1.06 / img.height)
     if img.width * fg_scale < PAN_W:
         fg_scale = PAN_W / img.width
     fg = img.resize((round(img.width * fg_scale), round(img.height * fg_scale)), Image.LANCZOS)
-    return np.asarray(bg), np.asarray(fg)
+    return np.asarray(backdrop(img)), np.asarray(fg)
 
 
-def panel_frames(path, n_frames):
+def panel_frames(path, n_frames, fps=30, scroll="auto"):
     bg, fg = prepare_panel(path)
     fh, fw = fg.shape[:2]
     x0 = (W - fw) // 2
-    if fh <= H:
-        y0 = (H - fh) // 2
+
+    def still(view, x):
         frame = bg.copy()
-        frame[y0:y0 + fh, x0:x0 + fw] = fg
-        data = frame.tobytes()
+        vh, vw = view.shape[:2]
+        y0 = (H - vh) // 2
+        frame[y0:y0 + vh, x:x + vw] = view
+        return frame
+
+    if fh <= H:
+        data = still(fg, x0).tobytes()
         for _ in range(n_frames):
             yield data
         return
     travel = fh - H
+
+    if scroll == "always" or travel / max(n_frames / fps, 0.01) <= MAX_SCROLL_SPEED:
+        for f in range(n_frames):
+            t = f / max(n_frames - 1, 1)
+            t = t * t * (3 - 2 * t)  # ease in/out
+            y = round(travel * t)
+            frame = bg.copy()
+            frame[:, x0:x0 + fw] = fg[y:y + H]
+            yield frame.tobytes()
+        return
+
+    # Scrolling would be too fast to watch comfortably: show the panel as a few
+    # still, overlapping screen-sized views, top to bottom, with soft fades.
+    views = -(-fh // H)
+    while views > 1 and n_frames / views < STILL_VIEW_MIN * fps:
+        views -= 1
+    if views == 1:
+        # Too little time for several views: show the whole panel, shrunk to fit.
+        small = np.asarray(Image.fromarray(fg).resize((max(1, round(fw * H / fh)), H), Image.LANCZOS))
+        data = still(small, (W - small.shape[1]) // 2).tobytes()
+        for _ in range(n_frames):
+            yield data
+        return
+    frames = [still(fg[round(travel * i / (views - 1)):][:H], x0) for i in range(views)]
+    fade = min(round(VIEW_FADE * fps), n_frames // (views * 3))
+    per = n_frames / views
     for f in range(n_frames):
-        t = f / max(n_frames - 1, 1)
-        t = t * t * (3 - 2 * t)  # ease in/out
-        y = round(travel * t)
-        frame = bg.copy()
-        frame[:, x0:x0 + fw] = fg[y:y + H]
-        yield frame.tobytes()
+        i = min(int(f / per), views - 1)
+        until_next = round((i + 1) * per) - f
+        if i < views - 1 and fade > 0 and until_next <= fade:
+            a = 1 - until_next / (fade + 1)
+            yield (frames[i] * (1 - a) + frames[i + 1] * a).astype(np.uint8).tobytes()
+        else:
+            yield frames[i].tobytes()
 
 
-def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_path, fps, music, music_volume):
+def pairable(path):
+    w, h = Image.open(path).size
+    return PAIR_MIN_RATIO <= h / w <= PAIR_MAX_RATIO
+
+
+def pair_frames(left_path, right_path, show_right, n_frames, fps=30):
+    """Two panels side by side over the left one's backdrop. The left panel slides
+    in first; on the second call (show_right) it stays put and the right one joins."""
+    left = Image.open(left_path).convert("RGB")
+    bg = np.asarray(backdrop(left)).astype(np.float32)
+
+    slots = []
+    for i, img in enumerate([left, Image.open(right_path).convert("RGB")]):
+        scale = min(PAIR_SLOT_W / img.width, PAIR_SLOT_H / img.height)
+        fg = np.asarray(img.resize((round(img.width * scale), round(img.height * scale)), Image.LANCZOS))
+        centre = W / 2 + (PAIR_GAP / 2 + PAIR_SLOT_W / 2) * (1 if i else -1)
+        x, y = round(centre - fg.shape[1] / 2), (H - fg.shape[0]) // 2
+        shadow = Image.new("L", (W, H), 0)
+        shadow.paste(150, (x + 10, y + 14, x + fg.shape[1] + 10, y + fg.shape[0] + 14))
+        shadow = np.asarray(shadow.filter(ImageFilter.GaussianBlur(18)), np.float32)[..., None] / 255
+        slots.append((fg.astype(np.float32), x, y, shadow, 1 if i else -1))
+
+    def draw(frame, slot, alpha, dx):
+        fg, x, y, shadow, _ = slot
+        frame *= 1 - shadow * alpha
+        x = max(0, min(W - fg.shape[1], x + dx))
+        region = frame[y:y + fg.shape[0], x:x + fg.shape[1]]
+        region += (fg - region) * alpha
+
+    base = bg.copy()
+    if show_right:
+        draw(base, slots[0], 1, 0)
+    entering = slots[1] if show_right else slots[0]
+    enter = max(1, round(ENTER_SECONDS * fps))
+    for f in range(n_frames):
+        if f >= enter:
+            if f == enter or enter >= n_frames:
+                frame = base.copy()
+                draw(frame, entering, 1, 0)
+                data = frame.astype(np.uint8).tobytes()
+            yield data
+            continue
+        e = 1 - (1 - (f + 1) / enter) ** 3  # ease out
+        frame = base.copy()
+        draw(frame, entering, e, round((1 - e) * ENTER_SHIFT * entering[4]))
+        yield frame.astype(np.uint8).tobytes()
+
+
+def plan_shots(timeline, fps, layout):
+    """Pick how each timeline entry is drawn: ("single",) or ("pair", left, right, show_right).
+    Two neighbouring panels in the same beat share the screen when both suit it."""
+    shots = [("single",)] * len(timeline)
+    if layout == "classic":
+        return shots
+    i = 0
+    while i + 1 < len(timeline):
+        (pa, sa, ba), (pb, sb, bb) = timeline[i], timeline[i + 1]
+        if ba == bb and sa >= 1.0 and sb >= 1.0 and pairable(pa) and pairable(pb):
+            shots[i] = ("pair", pa, pb, False)
+            shots[i + 1] = ("pair", pa, pb, True)
+            i += 2
+        else:
+            i += 1
+    return shots
+
+
+def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_path, fps, music, music_volume,
+                 layout="mixed"):
     """Encode the video. Returns the frame number where each beat starts."""
     timeline = []  # (panel_path, seconds, beat_index)
     for b, (beat, dur) in enumerate(zip(beats, durations)):
@@ -690,10 +798,14 @@ def render_video(beats, panel_paths, durations, audio_dir, narration_wav, out_pa
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     elapsed, frames_written = 0.0, 0
     try:
-        for path, secs, _ in timeline:
+        for (path, secs, _), shot in zip(timeline, plan_shots(timeline, fps, layout)):
             elapsed += secs
             n = round(elapsed * fps) - frames_written
-            for data in panel_frames(path, n):
+            if shot[0] == "pair":
+                frames = pair_frames(*shot[1:], n, fps)
+            else:
+                frames = panel_frames(path, n, fps, "always" if layout == "classic" else "auto")
+            for data in frames:
                 proc.stdin.write(data)
             frames_written += n
     finally:
@@ -765,6 +877,10 @@ def main():
     ap.add_argument("--voice", default="en-US-AndrewNeural", help="edge-tts voice (list with: edge-tts --list-voices)")
     ap.add_argument("--rate", default="+8%", help="speech speed, e.g. +0%%, +15%%")
     ap.add_argument("--fps", type=int, default=30)
+    ap.add_argument("--layout", choices=["mixed", "classic"], default="mixed",
+                    help="mixed: neighbouring panels sometimes share the screen side by side, and tall "
+                         "panels only scroll when it's slow enough to be comfortable. classic: one panel "
+                         "at a time, tall panels always scroll")
     ap.add_argument("--music", type=Path, help="optional background music file, looped")
     ap.add_argument("--music-volume", type=float, default=0.12)
     ap.add_argument("--max-part-mb", type=float, default=0,
@@ -857,7 +973,7 @@ def main():
     # 4. video
     print(f"Rendering {args.output}...")
     beat_frames = render_video(beats, video_paths, durations, audio_dir, narration, args.output,
-                               args.fps, args.music, args.music_volume)
+                               args.fps, args.music, args.music_volume, args.layout)
     print(f"Done: {args.output}")
     if args.max_part_mb and args.output.stat().st_size > args.max_part_mb * 1024 * 1024:
         for part in split_into_parts(args.output, beat_frames, args.fps, args.max_part_mb):
